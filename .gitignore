@@ -1,0 +1,28 @@
+# Binaries and compiled executables
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+reverse-local
+reverse-local-debug
+
+# Go build cache and test binaries
+*.test
+*.out
+/dist/
+/bin/
+
+# User runtime configuration & local certificates (store in user config dir)
+routes.json
+ca.crt
+ca.key
+*.pem
+
+# Operating System & IDE metadata
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~

@@ -1,0 +1,1487 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reverse.Local: Local Reverse Proxy, Hosts Manager &amp; Dynamic SSL</title>
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            surface: {
+              base: "#0b0f19",
+              panel: "#0f172a",
+              card: "#171f33",
+              cardHover: "#1e293b",
+              border: "#334155",
+              borderLight: "#475569"
+            },
+            brand: {
+              emerald: "#10b981",
+              emeraldLight: "#34d399",
+              emeraldDark: "#059669",
+              cyan: "#06b6d4",
+              cyanLight: "#22d3ee"
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
+            mono: ['JetBrains Mono', 'ui-monospace', 'monospace']
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      background-color: #0b0f19;
+      color: #dfe2f1;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+    button:focus-visible, a:focus-visible, input:focus-visible {
+      outline: 2px solid #10b981;
+      outline-offset: 2px;
+    }
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0b0f19;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
+  </style>
+</head>
+<body class="bg-[#0b0f19] text-[#dfe2f1] min-h-screen flex flex-col antialiased selection:bg-[#10b981] selection:text-slate-950">
+
+  <!-- TOP COMMAND BAR -->
+  <header class="flex justify-between items-center w-full px-4 sm:px-6 py-3 border-b border-[#334155] bg-[#0f172a] sticky top-0 z-30">
+    <div class="flex items-center gap-5">
+      <!-- RL Monogram Badge & Title -->
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded border border-[#10b981] bg-[#171f33] flex items-center justify-center font-mono text-sm text-[#10b981] font-semibold tracking-tighter shadow-sm">
+          RL
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-bold text-white tracking-tight">reverse.local</span>
+            <span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-[#1e293b] text-slate-300 border border-[#334155]">v1.0</span>
+          </div>
+          <div class="flex items-center gap-1.5 mt-0.5">
+            <span class="w-1.5 h-1.5 rounded-full bg-[#10b981] inline-block"></span>
+            <span class="text-[11px] font-mono text-slate-400">Built by <strong class="text-[#10b981] font-medium">Hansen Dusenov</strong></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Navigation tabs -->
+      <nav class="hidden lg:flex items-center gap-5 ml-2 border-l border-[#334155] pl-5 text-xs font-medium">
+        <button onclick="scrollToRoutes()" class="text-[#10b981] font-semibold border-b-2 border-[#10b981] pb-1">Routes</button>
+        <button onclick="scrollToLogs()" class="text-slate-400 hover:text-white transition-colors flex items-center gap-1.5">
+          <span>Access Logs</span>
+          <span id="nav-logs-badge" class="px-1.5 py-0.2 rounded-full text-[10px] bg-[#171f33] border border-[#334155] text-cyan-400 font-mono">0</span>
+        </button>
+        <button onclick="scrollToCert()" class="text-slate-400 hover:text-white transition-colors">Certificates</button>
+        <button onclick="scrollToHosts()" class="text-slate-400 hover:text-white transition-colors">Hosts Sync</button>
+      </nav>
+    </div>
+
+    <!-- Right Status Badges & Quick Action Controls -->
+    <div class="flex items-center gap-2.5">
+      <!-- Proxy Port Indicator -->
+      <div class="hidden xl:flex items-center gap-2 bg-[#0b0f19] border border-[#334155] px-2.5 py-1 rounded text-xs font-mono">
+        <span class="w-2 h-2 rounded-full bg-[#10b981]"></span>
+        <span class="text-slate-400">Proxy:</span>
+        <span class="text-[#10b981]">HTTP 80 &rarr; HTTPS 443</span>
+      </div>
+
+      <!-- Root CA Trust Status -->
+      <div id="ca-status-badge" class="hidden sm:flex items-center gap-1.5 bg-[#0b0f19] border border-[#334155] px-2.5 py-1 rounded text-xs font-mono">
+        <svg class="w-3.5 h-3.5 text-[#06b6d4]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+        </svg>
+        <span class="text-slate-400">Root CA:</span>
+        <span id="ca-status-text" class="text-[#06b6d4] font-medium">Active (Trusted)</span>
+        <button id="btn-install-ca" onclick="installRootCA()" class="hidden ml-1 px-1.5 py-0.5 text-[10px] bg-[#10b981] hover:bg-[#059669] text-slate-950 font-semibold rounded transition">
+          Install CA
+        </button>
+      </div>
+
+      <!-- Download CA Certificate Button -->
+      <a href="/ca.crt" download="reverse-local-ca.crt" title="Download Root CA Certificate (.crt) to manually trust" class="hidden md:flex items-center gap-1.5 px-3 py-1.5 bg-[#171f33] border border-[#334155] hover:border-[#475569] text-slate-200 hover:text-[#10b981] transition text-xs font-mono rounded">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+        </svg>
+        <span>Download CA</span>
+      </a>
+
+      <!-- Add New Route Primary CTA -->
+      <button onclick="openAddModal()" class="flex items-center gap-1.5 px-3.5 py-1.5 bg-[#10b981] hover:bg-[#059669] text-slate-950 font-semibold text-xs rounded transition active:scale-[0.99]">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"></path>
+        </svg>
+        <span>New Route</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- MAIN VIEWPORT CONTAINER -->
+  <main class="flex-1 w-full max-w-[1520px] mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
+
+    <!-- METRICS ARCHITECTURAL GRID -->
+    <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <!-- Metric 1: Active Routes -->
+      <div class="bg-[#0f172a] border border-[#334155] rounded-lg p-4 flex flex-col justify-between hover:border-[#475569] transition-colors">
+        <div class="flex justify-between items-start">
+          <span class="text-[10px] font-mono font-semibold text-slate-400 uppercase tracking-wider">ACTIVE ROUTES</span>
+          <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-[#171f33] text-[#10b981] border border-[#334155] flex items-center gap-1">
+            <span class="w-1.5 h-1.5 rounded-full bg-[#10b981]"></span>
+            <span id="metric-uptime">100% online</span>
+          </span>
+        </div>
+        <div class="mt-4">
+          <div class="text-2xl font-bold font-mono text-white tracking-tight">
+            <span id="stat-active-count">0</span>
+            <span class="text-sm font-sans font-normal text-slate-400">/ <span id="stat-total-count">0 registered</span></span>
+          </div>
+          <div class="mt-3 flex items-center justify-between border-t border-[#334155] pt-2 text-xs font-mono text-slate-400">
+            <span>Ports bound</span>
+            <span id="metric-ports" class="text-[#10b981] font-semibold truncate max-w-[180px]">80, 443</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Metric 2: SSL/TLS Authority -->
+      <div id="section-cert" class="bg-[#0f172a] border border-[#334155] rounded-lg p-4 flex flex-col justify-between hover:border-[#475569] transition-colors">
+        <div class="flex justify-between items-start">
+          <span class="text-[10px] font-mono font-semibold text-slate-400 uppercase tracking-wider">SSL/TLS AUTHORITY</span>
+          <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-[#171f33] text-[#06b6d4] border border-[#334155]">
+            SNI ENGINE
+          </span>
+        </div>
+        <div class="mt-4">
+          <div class="text-sm font-semibold text-white">Dynamic SNI on-the-fly</div>
+          <div class="mt-3 flex items-center justify-between border-t border-[#334155] pt-2 text-xs font-mono text-slate-400">
+            <span>Cipher specs</span>
+            <span class="text-[#06b6d4]">RSA 2048 / TLS 1.3</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Metric 3: OS Hosts Sync -->
+      <div id="section-hosts" class="bg-[#0f172a] border border-[#334155] rounded-lg p-4 flex flex-col justify-between hover:border-[#475569] transition-colors">
+        <div class="flex justify-between items-start">
+          <span class="text-[10px] font-mono font-semibold text-slate-400 uppercase tracking-wider">OS HOSTS SYNC</span>
+          <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-[#171f33] text-[#10b981] border border-[#334155]">
+            LOCK CLEAN
+          </span>
+        </div>
+        <div class="mt-4">
+          <div class="text-sm font-semibold text-white">Auto Synchronized</div>
+          <div class="mt-3 flex items-center justify-between border-t border-[#334155] pt-2 text-xs font-mono text-slate-400">
+            <span>Target table</span>
+            <span class="text-slate-300">hosts (0 conflicts)</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Metric 4: Live Traffic Count -->
+      <div class="bg-[#0f172a] border border-[#334155] rounded-lg p-4 flex flex-col justify-between hover:border-[#475569] transition-colors">
+        <div class="flex justify-between items-start">
+          <span class="text-[10px] font-mono font-semibold text-slate-400 uppercase tracking-wider">TRAFFIC TELEMETRY</span>
+          <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-[#171f33] text-[#06b6d4] border border-[#334155]">
+            LIVE LOGGER
+          </span>
+        </div>
+        <div class="mt-4">
+          <div class="text-2xl font-bold font-mono text-white tracking-tight">
+            <span id="metric-total-requests">0</span>
+            <span class="text-sm font-sans font-normal text-slate-400">requests recorded</span>
+          </div>
+          <div class="mt-3 flex items-center justify-between border-t border-[#334155] pt-2 text-xs font-mono text-slate-400">
+            <span>Stream status</span>
+            <span id="sse-status" class="text-[#10b981] flex items-center gap-1">
+              <span class="w-1.5 h-1.5 rounded-full bg-[#10b981]"></span>
+              Live (SSE)
+            </span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ROUTES MANAGEMENT DATA TABLE SECTION -->
+    <section id="section-routes" class="bg-[#0f172a] border border-[#334155] rounded-lg overflow-hidden shadow-sm">
+      
+      <!-- Table Controls Toolbar -->
+      <div class="p-4 border-b border-[#334155] flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 bg-[#0f172a]">
+        <!-- Segmented Filter Tabs -->
+        <div class="flex items-center gap-1 bg-[#0b0f19] p-1 rounded border border-[#334155] self-start">
+          <button onclick="setFilter('all')" id="tab-all" class="px-3 py-1 bg-[#1e293b] text-[#10b981] font-mono text-xs font-semibold rounded">
+            All (<span id="filter-all-count">0</span>)
+          </button>
+          <button onclick="setFilter('active')" id="tab-active" class="px-3 py-1 text-slate-400 hover:text-white font-mono text-xs rounded transition-colors">
+            Active (<span id="filter-active-count">0</span>)
+          </button>
+          <button onclick="setFilter('inactive')" id="tab-inactive" class="px-3 py-1 text-slate-400 hover:text-white font-mono text-xs rounded transition-colors">
+            Inactive (<span id="filter-inactive-count">0</span>)
+          </button>
+        </div>
+
+        <!-- Search & Quick Sync Controls -->
+        <div class="flex items-center gap-2 flex-1 sm:max-w-md justify-end">
+          <div class="relative w-full">
+            <svg class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+            </svg>
+            <input type="text" id="search-input" oninput="renderRoutes()" placeholder="Filter by domain or target port..." class="w-full bg-[#0b0f19] border border-[#334155] pl-9 pr-3 py-1.5 text-xs font-mono text-slate-100 placeholder-slate-500 rounded focus:border-[#10b981] focus:outline-none transition">
+          </div>
+
+          <!-- Refresh Button -->
+          <button onclick="fetchRoutes()" title="Refresh and sync routes" class="p-2 border border-[#334155] bg-[#0b0f19] hover:border-[#475569] text-slate-400 hover:text-white rounded transition">
+            <svg id="refresh-spinner" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Core Data Table -->
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+          <thead>
+            <tr class="border-b border-[#334155] bg-[#0b0f19] text-[10px] font-mono font-semibold text-slate-400 uppercase tracking-wider">
+              <th class="py-3 px-4 w-20">STATUS</th>
+              <th class="py-3 px-4">DOMAIN (HTTPS)</th>
+              <th class="py-3 px-4">LOCAL TARGET</th>
+              <th class="py-3 px-4">SSL CERTIFICATE</th>
+              <th class="py-3 px-4 hidden md:table-cell">CREATED</th>
+              <th class="py-3 px-4 text-right w-24">ACTIONS</th>
+            </tr>
+          </thead>
+          <tbody id="routes-table-body" class="divide-y divide-[#334155] font-mono text-xs">
+            <!-- Dynamic rows rendered via JavaScript -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Empty State -->
+      <div id="empty-state" class="hidden py-14 px-6 text-center space-y-3">
+        <div class="w-12 h-12 rounded bg-[#0b0f19] border border-[#334155] text-slate-500 flex items-center justify-center mx-auto">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+          </svg>
+        </div>
+        <div>
+          <h3 class="text-sm font-semibold text-white">No Routes Registered</h3>
+          <p class="text-xs text-slate-400 mt-1 max-w-sm mx-auto">Add a local domain route to bind local ports to secure HTTPS domains and sync your OS hosts file automatically.</p>
+        </div>
+        <button onclick="openAddModal()" class="px-3.5 py-1.5 rounded bg-[#10b981] hover:bg-[#059669] text-slate-950 font-semibold text-xs transition inline-flex items-center space-x-1.5">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"></path>
+          </svg>
+          <span>Add New Route</span>
+        </button>
+      </div>
+
+      <!-- Pagination / Footer Metadata Bar -->
+      <div class="px-4 py-3 bg-[#0b0f19] border-t border-[#334155] flex flex-col sm:flex-row justify-between items-center gap-2 text-xs font-mono text-slate-400">
+        <div>Showing <span id="table-showing-count">0</span> routing entries</div>
+        <div class="flex items-center gap-4">
+          <span class="flex items-center gap-1.5">
+            <span class="w-1.5 h-1.5 rounded-full bg-[#10b981]"></span>
+            Hosts auto-sync enabled
+          </span>
+          <span class="text-[#334155]">|</span>
+          <span>DNS Resolver: 127.0.0.1</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- LIVE HTTP & REVERSE PROXY ACCESS LOGS (NEW FEATURE) -->
+    <section id="section-logs" class="bg-[#0f172a] border border-[#334155] rounded-lg overflow-hidden shadow-sm">
+      
+      <!-- Logs Toolbar -->
+      <div class="p-4 border-b border-[#334155] flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3 bg-[#0f172a]">
+        <div>
+          <div class="flex items-center gap-2.5">
+            <h2 class="text-sm font-bold font-mono text-white tracking-tight uppercase">REVERSE PROXY ACCESS &amp; TRAFFIC LOGS</h2>
+            <span class="relative flex h-2 w-2">
+              <span id="log-pulse" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#10b981] opacity-75"></span>
+              <span class="relative inline-flex rounded-full h-2 w-2 bg-[#10b981]"></span>
+            </span>
+          </div>
+          <p class="text-xs text-slate-400 mt-0.5">Live inspection of incoming HTTP requests, target backends, status codes, and latency.</p>
+        </div>
+
+        <!-- Filter & Action Controls -->
+        <div class="flex flex-wrap items-center gap-2 w-full lg:w-auto justify-start lg:justify-end">
+          <!-- Status Filter Pills -->
+          <div class="flex items-center gap-1 bg-[#0b0f19] p-1 rounded border border-[#334155] text-xs font-mono">
+            <button onclick="setLogStatusFilter('all')" id="log-filter-all" class="px-2 py-0.5 rounded bg-[#1e293b] text-[#10b981] font-semibold">All</button>
+            <button onclick="setLogStatusFilter('2xx')" id="log-filter-2xx" class="px-2 py-0.5 rounded text-slate-400 hover:text-white transition">2xx</button>
+            <button onclick="setLogStatusFilter('3xx')" id="log-filter-3xx" class="px-2 py-0.5 rounded text-slate-400 hover:text-white transition">3xx</button>
+            <button onclick="setLogStatusFilter('4xx')" id="log-filter-4xx" class="px-2 py-0.5 rounded text-slate-400 hover:text-white transition">4xx</button>
+            <button onclick="setLogStatusFilter('5xx')" id="log-filter-5xx" class="px-2 py-0.5 rounded text-slate-400 hover:text-white transition">5xx</button>
+          </div>
+
+          <!-- Log Search Input -->
+          <div class="relative">
+            <input type="text" id="log-search-input" oninput="renderLogs()" placeholder="Search domain, path, method..." class="w-44 sm:w-52 bg-[#0b0f19] border border-[#334155] px-3 py-1 text-xs font-mono text-white placeholder-slate-500 rounded focus:border-[#10b981] focus:outline-none transition">
+          </div>
+
+          <!-- Pause / Resume Stream Button -->
+          <button id="btn-toggle-stream" onclick="toggleStream()" title="Pause or resume live logging stream" class="px-2.5 py-1 bg-[#0b0f19] border border-[#334155] hover:border-[#475569] text-slate-300 text-xs font-mono rounded flex items-center gap-1.5 transition">
+            <span id="stream-btn-icon" class="w-2 h-2 rounded-full bg-[#10b981]"></span>
+            <span id="stream-btn-text">Pause</span>
+          </button>
+
+          <!-- Export Logs Button -->
+          <button onclick="exportLogsJSON()" title="Export access logs to JSON file" class="px-2.5 py-1 bg-[#0b0f19] border border-[#334155] hover:border-[#475569] text-slate-300 hover:text-white text-xs font-mono rounded flex items-center gap-1.5 transition">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+            <span>Export</span>
+          </button>
+
+          <!-- Clear Logs Button -->
+          <button onclick="clearLogs()" title="Clear all logs history" class="px-2.5 py-1 bg-[#0b0f19] border border-[#334155] hover:border-rose-500/40 text-slate-300 hover:text-rose-400 text-xs font-mono rounded flex items-center gap-1.5 transition">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+            </svg>
+            <span>Clear</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Logs Live Telemetry Summary Strip -->
+      <div class="px-4 py-2 bg-[#0b0f19] border-b border-[#334155] flex flex-wrap items-center justify-between text-xs font-mono text-slate-400 gap-2">
+        <div class="flex items-center gap-3 overflow-x-auto">
+          <span>Captured: <b id="stat-total" class="text-white">0</b></span>
+          <span class="text-slate-600">&bull;</span>
+          <span>Success: <b id="stat-2xx" class="text-emerald-400">0</b> (2xx)</span>
+          <span class="text-slate-600">&bull;</span>
+          <span>Redirects: <b id="stat-3xx" class="text-blue-400">0</b> (3xx)</span>
+          <span class="text-slate-600">&bull;</span>
+          <span>Errors: <b id="stat-err" class="text-rose-400">0</b> (4xx/5xx)</span>
+          <span class="text-slate-600">&bull;</span>
+          <span>Avg Latency: <b id="stat-avg-lat" class="text-cyan-400">0 ms</b></span>
+        </div>
+        <div class="text-[11px] text-slate-500 hidden sm:block">
+          Click any row to inspect complete request &amp; backend target
+        </div>
+      </div>
+
+      <!-- Logs Table -->
+      <div class="overflow-x-auto max-h-[460px] overflow-y-auto">
+        <table class="w-full text-left border-collapse">
+          <thead class="sticky top-0 z-10 bg-[#0b0f19]">
+            <tr class="border-b border-[#334155] text-[10px] font-mono font-semibold text-slate-400 uppercase tracking-wider">
+              <th class="py-2.5 px-4 w-24">TIME</th>
+              <th class="py-2.5 px-4 w-20">METHOD</th>
+              <th class="py-2.5 px-4 w-20">STATUS</th>
+              <th class="py-2.5 px-4">DOMAIN &amp; PATH</th>
+              <th class="py-2.5 px-4">FORWARDED TARGET</th>
+              <th class="py-2.5 px-4 w-24">LATENCY</th>
+              <th class="py-2.5 px-4 w-28 hidden lg:table-cell">CLIENT IP</th>
+              <th class="py-2.5 px-4 w-20 text-right">ACTION</th>
+            </tr>
+          </thead>
+          <tbody id="logs-table-body" class="divide-y divide-[#334155] font-mono text-xs">
+            <!-- Dynamically populated via SSE / Fetch -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Logs Empty State -->
+      <div id="logs-empty-state" class="py-12 px-6 text-center space-y-2">
+        <div class="w-10 h-10 rounded bg-[#0b0f19] border border-[#334155] text-slate-500 flex items-center justify-center mx-auto">
+          <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+          </svg>
+        </div>
+        <div class="text-xs font-semibold text-white">No HTTP Traffic Recorded Yet</div>
+        <p class="text-[11px] text-slate-400 max-w-md mx-auto">
+          Send a request to any configured domain (e.g. <code class="text-cyan-400">curl https://api.local</code> or open in your browser) to watch real-time proxy traffic appear here.
+        </p>
+      </div>
+
+      <!-- Logs Footer -->
+      <div class="px-4 py-2.5 bg-[#0b0f19] border-t border-[#334155] flex justify-between items-center text-xs font-mono text-slate-400">
+        <div>Showing <span id="logs-showing-count">0</span> access entries (capped at 1000 in memory)</div>
+        <div class="flex items-center gap-2">
+          <span class="w-2 h-2 rounded-full bg-[#10b981]"></span>
+          <span>Buffering active</span>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- TECHNICAL FOOTER WITH HANSEN DUSENOV ATTRIBUTION -->
+  <footer class="w-full py-4 px-6 sm:px-8 flex flex-col md:flex-row justify-between items-center border-t border-[#334155] bg-[#0b0f19] text-xs font-mono text-slate-400 mt-auto gap-3">
+    <div class="flex flex-col sm:flex-row items-center gap-2 sm:gap-6">
+      <span class="text-[#10b981] font-semibold">Reverse.Local &bull; Engineered by Hansen Dusenov</span>
+      <span class="text-slate-400">Copyright &copy; 2026 Hansen Dusenov. All rights reserved.</span>
+    </div>
+    <div class="flex items-center gap-3 text-slate-400">
+      <span class="flex items-center gap-1.5">
+        <span class="w-1.5 h-1.5 rounded-full bg-[#10b981]"></span>
+        Local Daemon Active
+      </span>
+      <span>&bull;</span>
+      <span>reverse.local</span>
+    </div>
+  </footer>
+
+  <!-- MODAL DIALOG: CONFIGURE REVERSE PROXY ROUTE -->
+  <div id="modal" onclick="if (event.target === this) closeModal()" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-[2px] hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="bg-[#0f172a] border border-[#334155] w-full max-w-lg rounded-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+      
+      <!-- Modal Header -->
+      <div class="p-5 border-b border-[#334155] flex justify-between items-start bg-[#171f33]">
+        <div>
+          <h2 id="modal-title" class="text-sm font-semibold text-white tracking-tight">Configure Reverse Proxy Route</h2>
+          <p class="text-xs text-slate-400 mt-0.5">Bind local development port to secure custom local domain</p>
+        </div>
+        <button onclick="closeModal()" class="text-slate-400 hover:text-white p-1 rounded transition-colors" aria-label="Close dialog">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Modal Form Controls -->
+      <form id="route-form" onsubmit="handleFormSubmit(event)" class="p-6 space-y-4">
+        <input type="hidden" id="form-id">
+
+        <!-- Domain Input -->
+        <div>
+          <label for="form-domain" class="block text-[10px] font-mono font-semibold text-slate-400 uppercase mb-1.5">DOMAIN NAME</label>
+          <div class="flex items-stretch rounded border border-[#334155] bg-[#0b0f19] focus-within:border-[#10b981]">
+            <span class="flex items-center px-3 text-xs font-mono text-slate-500 border-r border-[#334155] select-none">https://</span>
+            <input id="form-domain" type="text" required placeholder="myapp.local" oninput="updatePreview()" class="flex-1 bg-transparent border-0 px-3 py-2 text-xs font-mono text-white placeholder-slate-500 focus:outline-none">
+          </div>
+          <!-- Presets -->
+          <div class="flex items-center gap-1.5 mt-2 text-xs font-mono">
+            <span class="text-slate-400">Presets:</span>
+            <button type="button" onclick="appendSuffix('.local')" class="px-2 py-0.5 rounded text-xs bg-[#171f33] border border-[#334155] hover:border-slate-400 text-slate-200 transition">.local</button>
+            <button type="button" onclick="appendSuffix('.test')" class="px-2 py-0.5 rounded text-xs bg-[#171f33] border border-[#334155] hover:border-slate-400 text-slate-200 transition">.test</button>
+            <button type="button" onclick="appendSuffix('.dev')" class="px-2 py-0.5 rounded text-xs bg-[#171f33] border border-[#334155] hover:border-slate-400 text-slate-200 transition">.dev</button>
+          </div>
+        </div>
+
+        <!-- Target URL Input -->
+        <div>
+          <label for="form-target" class="block text-[10px] font-mono font-semibold text-slate-400 uppercase mb-1.5">TARGET PORT / ADDRESS</label>
+          <div class="relative">
+            <input id="form-target" type="text" required placeholder="http://127.0.0.1:3000" oninput="updatePreview()" class="w-full bg-[#0b0f19] border border-[#334155] px-3 py-2 text-xs font-mono text-white placeholder-slate-500 rounded focus:border-[#10b981] focus:outline-none transition">
+          </div>
+          <!-- Quick presets -->
+          <div class="flex items-center gap-1.5 mt-2 text-xs font-mono">
+            <span class="text-slate-400">Common:</span>
+            <button type="button" onclick="setTargetPreset('http://127.0.0.1:3000')" class="px-2 py-0.5 rounded text-xs bg-[#171f33] border border-[#334155] hover:border-slate-400 text-slate-200 transition">:3000</button>
+            <button type="button" onclick="setTargetPreset('http://127.0.0.1:5173')" class="px-2 py-0.5 rounded text-xs bg-[#171f33] border border-[#334155] hover:border-slate-400 text-slate-200 transition">:5173 (Vite)</button>
+            <button type="button" onclick="setTargetPreset('http://127.0.0.1:8080')" class="px-2 py-0.5 rounded text-xs bg-[#171f33] border border-[#334155] hover:border-slate-400 text-slate-200 transition">:8080</button>
+            <button type="button" onclick="setTargetPreset('http://127.0.0.1:8000')" class="px-2 py-0.5 rounded text-xs bg-[#171f33] border border-[#334155] hover:border-slate-400 text-slate-200 transition">:8000</button>
+          </div>
+        </div>
+
+        <!-- Toggles & Options -->
+        <div class="space-y-3 pt-2 border-t border-[#334155]">
+          <div class="flex items-center justify-between">
+            <div>
+              <span class="text-xs font-medium text-white block">Enable route immediately</span>
+              <span class="text-[11px] text-slate-400 block">Activate in proxy engine upon saving</span>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" id="form-active" checked class="sr-only peer">
+              <div class="w-8 h-4 bg-[#1e293b] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-[#10b981]"></div>
+            </label>
+          </div>
+        </div>
+
+        <!-- Live Route Preview Box -->
+        <div class="p-3 bg-[#0b0f19] border border-[#334155] rounded">
+          <span class="text-[10px] font-mono font-semibold text-slate-400 uppercase block mb-1">ROUTE PREVIEW</span>
+          <div class="flex items-center gap-2 font-mono text-xs overflow-hidden">
+            <span class="text-[#06b6d4] font-semibold truncate" id="preview-domain">https://myapp.local</span>
+            <span class="text-slate-500">&rarr;</span>
+            <span class="text-[#10b981] font-semibold truncate" id="preview-target">http://127.0.0.1:3000</span>
+          </div>
+        </div>
+
+        <!-- Error Feedback -->
+        <div id="form-error" class="hidden px-3 py-2 rounded bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-mono"></div>
+
+        <!-- Modal Actions -->
+        <div class="p-4 border-t border-[#334155] flex justify-end items-center gap-2.5 pt-3">
+          <button type="button" onclick="closeModal()" class="px-4 py-2 border border-[#334155] text-slate-200 hover:bg-[#171f33] rounded text-xs font-medium transition">
+            Cancel
+          </button>
+          <button type="submit" id="btn-save-route" class="px-5 py-2 bg-[#10b981] text-slate-950 font-semibold rounded hover:bg-[#059669] transition active:scale-[0.99] text-xs">
+            Save Route
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- DELETE CONFIRMATION MODAL -->
+  <div id="delete-modal" onclick="if (event.target === this) closeDeleteModal()" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-[2px] hidden" role="dialog" aria-modal="true">
+    <div class="bg-[#0f172a] border border-[#334155] w-full max-w-sm rounded-lg shadow-2xl p-5 space-y-4">
+      <div class="flex items-center space-x-3 text-rose-400">
+        <div class="w-9 h-9 rounded bg-rose-500/10 border border-rose-500/20 flex items-center justify-center">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+          </svg>
+        </div>
+        <h3 class="text-sm font-bold text-white">Delete Route</h3>
+      </div>
+      <p class="text-xs text-slate-300">
+        Are you sure you want to delete <span id="delete-domain-name" class="font-mono text-[#10b981] font-semibold"></span>?
+        The domain will be removed from your OS hosts file and reverse proxy routing table.
+      </p>
+      <div class="flex items-center justify-end space-x-2.5 pt-2">
+        <button onclick="closeDeleteModal()" class="px-3.5 py-1.5 rounded border border-[#334155] text-slate-300 hover:bg-[#171f33] text-xs font-medium transition">
+          Cancel
+        </button>
+        <button id="btn-confirm-delete" onclick="executeDelete()" class="px-3.5 py-1.5 rounded bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs transition">
+          Delete
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DIALOG: LOG ENTRY INSPECTION -->
+  <div id="log-detail-modal" onclick="if (event.target === this) closeLogDetailModal()" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-[2px] hidden" role="dialog" aria-modal="true" aria-labelledby="detail-title">
+    <div class="bg-[#0f172a] border border-[#334155] w-full max-w-2xl rounded-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 flex flex-col max-h-[90vh]">
+      
+      <!-- Modal Header -->
+      <div class="p-5 border-b border-[#334155] flex justify-between items-start bg-[#171f33]">
+        <div class="flex items-center gap-3">
+          <span id="detail-method-pill" class="px-2.5 py-1 rounded text-xs font-mono font-bold bg-[#0b0f19] border border-[#334155] text-cyan-400">GET</span>
+          <div>
+            <h2 id="detail-title" class="text-sm font-bold font-mono text-white tracking-tight">Request Details</h2>
+            <p class="text-xs text-slate-400 font-mono mt-0.5" id="detail-timestamp-sub">-</p>
+          </div>
+        </div>
+        <button onclick="closeLogDetailModal()" class="text-slate-400 hover:text-white p-1 rounded transition-colors" aria-label="Close dialog">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Modal Body (Scrollable) -->
+      <div class="p-6 space-y-4 overflow-y-auto">
+        
+        <!-- Status & Telemetry Strip -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono">
+          <div class="p-2.5 bg-[#0b0f19] border border-[#334155] rounded">
+            <div class="text-[10px] text-slate-400 uppercase font-semibold">STATUS CODE</div>
+            <div id="detail-status" class="mt-1 text-sm font-bold text-emerald-400">200 OK</div>
+          </div>
+          <div class="p-2.5 bg-[#0b0f19] border border-[#334155] rounded">
+            <div class="text-[10px] text-slate-400 uppercase font-semibold">LATENCY</div>
+            <div id="detail-duration" class="mt-1 text-sm font-bold text-cyan-400">0 ms</div>
+          </div>
+          <div class="p-2.5 bg-[#0b0f19] border border-[#334155] rounded">
+            <div class="text-[10px] text-slate-400 uppercase font-semibold">PROTOCOL</div>
+            <div id="detail-proto" class="mt-1 text-sm font-bold text-white">HTTP/2.0</div>
+          </div>
+          <div class="p-2.5 bg-[#0b0f19] border border-[#334155] rounded">
+            <div class="text-[10px] text-slate-400 uppercase font-semibold">BYTES SENT</div>
+            <div id="detail-bytes" class="mt-1 text-sm font-bold text-slate-300">0 B</div>
+          </div>
+        </div>
+
+        <!-- Target Forwarding Flow -->
+        <div class="p-3.5 bg-[#0b0f19] border border-[#334155] rounded space-y-2">
+          <div class="text-[10px] font-mono font-semibold text-slate-400 uppercase">PROXY ROUTING PIPELINE</div>
+          <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs font-mono bg-[#171f33] p-2.5 rounded border border-[#334155]">
+            <div class="flex-1 min-w-0">
+              <span class="text-[10px] text-slate-400 block">CLIENT INCOMING URL</span>
+              <span id="detail-incoming-url" class="text-cyan-400 font-semibold break-all select-all">https://api.local/</span>
+            </div>
+            <div class="text-slate-500 self-center hidden sm:block">&rarr;</div>
+            <div class="flex-1 min-w-0">
+              <span class="text-[10px] text-slate-400 block">FORWARDED UPSTREAM</span>
+              <span id="detail-target-url" class="text-[#10b981] font-semibold break-all select-all">http://127.0.0.1:3000/</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Error Diagnosis Banner (conditional) -->
+        <div id="detail-error-box" class="hidden p-3.5 bg-rose-950/40 border border-rose-800/60 rounded space-y-1.5 text-xs font-mono">
+          <div class="flex items-center gap-2 text-rose-300 font-bold">
+            <svg class="w-4 h-4 text-rose-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+            </svg>
+            <span id="detail-error-title">Proxy Routing Error</span>
+          </div>
+          <p id="detail-error-msg" class="text-rose-200/90 break-all select-all">-</p>
+          <p id="detail-error-hint" class="text-[11px] text-rose-400 pt-1 border-t border-rose-800/40">-</p>
+        </div>
+
+        <!-- Request Details Grid -->
+        <div class="space-y-2 text-xs font-mono">
+          <div class="text-[10px] font-semibold text-slate-400 uppercase">REQUEST METADATA</div>
+          <div class="border border-[#334155] rounded divide-y divide-[#334155] bg-[#0b0f19]">
+            <div class="p-2.5 flex justify-between gap-4">
+              <span class="text-slate-400 shrink-0">Client IP:</span>
+              <span id="detail-client-ip" class="text-white text-right break-all">-</span>
+            </div>
+            <div class="p-2.5 flex justify-between gap-4">
+              <span class="text-slate-400 shrink-0">User Agent:</span>
+              <span id="detail-user-agent" class="text-slate-300 text-right break-all select-all">-</span>
+            </div>
+            <div class="p-2.5 flex justify-between gap-4">
+              <span class="text-slate-400 shrink-0">Full Timestamp:</span>
+              <span id="detail-timestamp-full" class="text-slate-300 text-right">-</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- cURL Replay Snippet -->
+        <div class="space-y-1.5 font-mono text-xs">
+          <div class="flex justify-between items-center">
+            <span class="text-[10px] font-semibold text-slate-400 uppercase">REPLAY VIA CURL</span>
+            <button onclick="copyDetailCurl()" class="text-[11px] text-cyan-400 hover:text-cyan-300 flex items-center gap-1 transition">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+              <span>Copy cURL</span>
+            </button>
+          </div>
+          <div class="p-3 bg-[#070a11] border border-[#334155] rounded text-slate-300 select-all overflow-x-auto text-[11px] leading-relaxed" id="detail-curl-command">
+            curl -k -i -X GET "https://..."
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="p-4 border-t border-[#334155] flex justify-between items-center bg-[#171f33]">
+        <span class="text-[11px] font-mono text-slate-400">ID: <span id="detail-id" class="text-slate-300"></span></span>
+        <div class="flex items-center gap-2">
+          <button type="button" onclick="copyDetailCurl()" class="px-3.5 py-1.5 border border-[#334155] text-slate-200 hover:bg-[#0f172a] rounded text-xs font-mono font-medium transition flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+            <span>Copy cURL</span>
+          </button>
+          <button type="button" onclick="closeLogDetailModal()" class="px-4 py-1.5 bg-[#10b981] text-slate-950 font-semibold rounded hover:bg-[#059669] transition text-xs font-mono">
+            Close
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATION STACK -->
+  <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col space-y-2 pointer-events-none"></div>
+
+  <!-- APPLICATION JAVASCRIPT LOGIC -->
+  <script>
+    let routes = [];
+    let logs = [];
+    let currentFilter = 'all';
+    let currentLogStatusFilter = 'all';
+    let routeToDeleteId = null;
+    let sseEventSource = null;
+    let isStreamPaused = false;
+
+    document.addEventListener('DOMContentLoaded', () => {
+      fetchStatus();
+      fetchRoutes();
+      fetchLogs();
+      setupSSELogs();
+
+      setInterval(fetchRoutesQuiet, 5000);
+      setInterval(fetchStatus, 10000);
+
+      // Keyboard navigation
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          closeModal();
+          closeDeleteModal();
+          closeLogDetailModal();
+        }
+      });
+    });
+
+    // -------------------------------------------------------------
+    // LOGS & SSE STREAMING
+    // -------------------------------------------------------------
+    function setupSSELogs() {
+      if (sseEventSource) {
+        sseEventSource.close();
+      }
+
+      sseEventSource = new EventSource('/api/logs/stream');
+      const statusEl = document.getElementById('sse-status');
+
+      sseEventSource.onopen = () => {
+        statusEl.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-[#10b981]"></span> Live (SSE)`;
+      };
+
+      sseEventSource.onmessage = (event) => {
+        if (isStreamPaused) return;
+        try {
+          const entry = JSON.parse(event.data);
+          logs.unshift(entry);
+          if (logs.length > 1000) logs.pop();
+          renderLogs();
+        } catch (e) {}
+      };
+
+      sseEventSource.onerror = () => {
+        statusEl.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span> Polling`;
+        // Fallback polling if SSE fails
+        setTimeout(fetchLogsQuiet, 3000);
+      };
+    }
+
+    async function fetchLogs() {
+      try {
+        const res = await fetch('/api/logs?limit=250');
+        if (!res.ok) return;
+        logs = await res.json();
+        renderLogs();
+      } catch (err) {
+        console.warn('Logs fetch error:', err);
+      }
+    }
+
+    async function fetchLogsQuiet() {
+      if (isStreamPaused) return;
+      try {
+        const res = await fetch('/api/logs?limit=250');
+        if (!res.ok) return;
+        logs = await res.json();
+        renderLogs();
+      } catch (e) {}
+    }
+
+    function toggleStream() {
+      isStreamPaused = !isStreamPaused;
+      const btnText = document.getElementById('stream-btn-text');
+      const btnIcon = document.getElementById('stream-btn-icon');
+      const pulseEl = document.getElementById('log-pulse');
+
+      if (isStreamPaused) {
+        btnText.textContent = 'Resume';
+        btnIcon.className = 'w-2 h-2 rounded-full bg-amber-400';
+        pulseEl.classList.remove('animate-ping');
+        showToast('Logs streaming paused', 'info');
+      } else {
+        btnText.textContent = 'Pause';
+        btnIcon.className = 'w-2 h-2 rounded-full bg-[#10b981]';
+        pulseEl.classList.add('animate-ping');
+        fetchLogs();
+        showToast('Logs streaming resumed', 'success');
+      }
+    }
+
+    async function clearLogs() {
+      try {
+        const res = await fetch('/api/logs', { method: 'DELETE' });
+        if (!res.ok) throw new Error('Failed to clear logs');
+        logs = [];
+        renderLogs();
+        showToast('Access logs cleared', 'info');
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    function setLogStatusFilter(status) {
+      currentLogStatusFilter = status;
+      document.querySelectorAll('#log-filter-all, #log-filter-2xx, #log-filter-3xx, #log-filter-4xx, #log-filter-5xx').forEach(el => {
+        el.className = 'px-2 py-0.5 rounded text-slate-400 hover:text-white transition';
+      });
+      const activeBtn = document.getElementById(`log-filter-${status}`);
+      if (activeBtn) {
+        activeBtn.className = 'px-2 py-0.5 rounded bg-[#1e293b] text-[#10b981] font-semibold';
+      }
+      renderLogs();
+    }
+
+    let selectedLogEntry = null;
+
+    function renderLogs() {
+      // Update Telemetry Counters
+      const totalCount = logs.length;
+      let count2xx = 0, count3xx = 0, countErr = 0, totalDuration = 0;
+      logs.forEach(l => {
+        if (l.status_code >= 200 && l.status_code < 300) count2xx++;
+        else if (l.status_code >= 300 && l.status_code < 400) count3xx++;
+        else if (l.status_code >= 400) countErr++;
+        totalDuration += (l.duration_ms || 0);
+      });
+      const avgLat = totalCount > 0 ? Math.round(totalDuration / totalCount) : 0;
+
+      const statTotal = document.getElementById('stat-total');
+      if (statTotal) statTotal.textContent = totalCount;
+      const stat2xx = document.getElementById('stat-2xx');
+      if (stat2xx) stat2xx.textContent = count2xx;
+      const stat3xx = document.getElementById('stat-3xx');
+      if (stat3xx) stat3xx.textContent = count3xx;
+      const statErr = document.getElementById('stat-err');
+      if (statErr) statErr.textContent = countErr;
+      const statAvgLat = document.getElementById('stat-avg-lat');
+      if (statAvgLat) statAvgLat.textContent = `${avgLat} ms`;
+
+      const query = (document.getElementById('log-search-input').value || '').toLowerCase().trim();
+      let filtered = logs.filter(l => {
+        const matchesQuery = !query ||
+          l.host.toLowerCase().includes(query) ||
+          l.path.toLowerCase().includes(query) ||
+          l.method.toLowerCase().includes(query) ||
+          l.target_url.toLowerCase().includes(query) ||
+          (l.error && l.error.toLowerCase().includes(query));
+
+        if (!matchesQuery) return false;
+
+        if (currentLogStatusFilter === '2xx') return l.status_code >= 200 && l.status_code < 300;
+        if (currentLogStatusFilter === '3xx') return l.status_code >= 300 && l.status_code < 400;
+        if (currentLogStatusFilter === '4xx') return l.status_code >= 400 && l.status_code < 500;
+        if (currentLogStatusFilter === '5xx') return l.status_code >= 500 && l.status_code < 600;
+        return true;
+      });
+
+      const tbody = document.getElementById('logs-table-body');
+      const emptyState = document.getElementById('logs-empty-state');
+      document.getElementById('metric-total-requests').textContent = logs.length;
+      document.getElementById('nav-logs-badge').textContent = logs.length;
+      document.getElementById('logs-showing-count').textContent = filtered.length;
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = '';
+        emptyState.classList.remove('hidden');
+        return;
+      }
+
+      emptyState.classList.add('hidden');
+      tbody.innerHTML = filtered.map(l => {
+        const timeStr = l.timestamp ? new Date(l.timestamp).toTimeString().split(' ')[0] : '-';
+
+        // Method color
+        let methodColor = 'bg-[#171f33] text-cyan-400 border border-[#334155]';
+        if (l.method === 'POST') methodColor = 'bg-blue-950/60 text-blue-400 border border-blue-800/40';
+        else if (l.method === 'PUT') methodColor = 'bg-amber-950/60 text-amber-400 border border-amber-800/40';
+        else if (l.method === 'DELETE') methodColor = 'bg-rose-950/60 text-rose-400 border border-rose-800/40';
+        else if (l.proto === 'WebSocket') methodColor = 'bg-purple-950/60 text-purple-400 border border-purple-800/40';
+
+        // Status code color
+        let statusBadge = 'bg-emerald-950/50 text-[#34d399] border border-emerald-800/40';
+        if (l.status_code >= 300 && l.status_code < 400) statusBadge = 'bg-blue-950/50 text-blue-300 border border-blue-800/40';
+        else if (l.status_code >= 400 && l.status_code < 500) statusBadge = 'bg-amber-950/50 text-amber-300 border border-amber-800/40';
+        else if (l.status_code >= 500) statusBadge = 'bg-rose-950/50 text-rose-300 border border-rose-800/40';
+
+        // Latency color
+        let latencyColor = 'text-[#10b981]';
+        if (l.duration_ms > 100) latencyColor = 'text-amber-400';
+        if (l.duration_ms > 500) latencyColor = 'text-rose-400';
+
+        return `
+          <tr onclick="openLogDetail('${l.id}')" class="hover:bg-[#1a233a] cursor-pointer group transition-colors">
+            <!-- Time -->
+            <td class="py-2.5 px-4 whitespace-nowrap text-slate-400 text-xs">${timeStr}</td>
+
+            <!-- Method -->
+            <td class="py-2.5 px-4 whitespace-nowrap">
+              <span class="px-1.5 py-0.5 rounded text-[10px] font-bold ${methodColor}">${l.method}</span>
+            </td>
+
+            <!-- Status Code -->
+            <td class="py-2.5 px-4 whitespace-nowrap">
+              <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold ${statusBadge}">${l.status_code}</span>
+            </td>
+
+            <!-- Domain & Path -->
+            <td class="py-2.5 px-4 whitespace-nowrap">
+              <div class="flex items-center gap-1.5">
+                <span class="text-slate-400">${escapeHTML(l.host)}</span>
+                <span class="text-white font-medium">${escapeHTML(l.path)}</span>
+                ${l.error ? `<span class="text-[10px] text-rose-400 bg-rose-950/50 border border-rose-800/40 px-1.5 py-0.2 rounded font-mono truncate max-w-[200px]" title="${escapeHTML(l.error)}">${escapeHTML(l.error)}</span>` : ''}
+              </div>
+            </td>
+
+            <!-- Target URL -->
+            <td class="py-2.5 px-4 whitespace-nowrap text-slate-400">
+              <span class="text-[#06b6d4]">${escapeHTML(l.target_url)}</span>
+            </td>
+
+            <!-- Latency -->
+            <td class="py-2.5 px-4 whitespace-nowrap ${latencyColor} font-semibold">
+              ${l.duration_ms}ms
+            </td>
+
+            <!-- Client IP -->
+            <td class="py-2.5 px-4 whitespace-nowrap text-slate-400 hidden lg:table-cell text-xs">
+              ${escapeHTML(l.client_ip)}
+            </td>
+
+            <!-- Action Column -->
+            <td class="py-2.5 px-4 whitespace-nowrap text-right">
+              <button onclick="event.stopPropagation(); openLogDetail('${l.id}')" class="px-2 py-0.5 rounded text-[11px] font-mono bg-[#171f33] border border-[#334155] text-cyan-400 group-hover:border-cyan-400 group-hover:bg-[#0f172a] transition inline-flex items-center gap-1 ml-auto">
+                <span>Inspect</span>
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function openLogDetail(id) {
+      const entry = logs.find(l => l.id === id);
+      if (!entry) return;
+      selectedLogEntry = entry;
+
+      const modal = document.getElementById('log-detail-modal');
+      document.getElementById('detail-id').textContent = entry.id || '-';
+      document.getElementById('detail-method-pill').textContent = entry.method;
+      
+      // Method pill style
+      let methodColor = 'bg-[#0b0f19] text-cyan-400 border border-[#334155]';
+      if (entry.method === 'POST') methodColor = 'bg-blue-950/70 text-blue-400 border border-blue-800/50';
+      else if (entry.method === 'PUT') methodColor = 'bg-amber-950/70 text-amber-400 border border-amber-800/50';
+      else if (entry.method === 'DELETE') methodColor = 'bg-rose-950/70 text-rose-400 border border-rose-800/50';
+      document.getElementById('detail-method-pill').className = `px-2.5 py-1 rounded text-xs font-mono font-bold ${methodColor}`;
+
+      // Status text
+      const statusText = getStatusText(entry.status_code);
+      const statusEl = document.getElementById('detail-status');
+      statusEl.textContent = `${entry.status_code} ${statusText}`;
+      if (entry.status_code < 300) statusEl.className = 'mt-1 text-sm font-bold text-emerald-400';
+      else if (entry.status_code < 400) statusEl.className = 'mt-1 text-sm font-bold text-blue-400';
+      else if (entry.status_code < 500) statusEl.className = 'mt-1 text-sm font-bold text-amber-400';
+      else statusEl.className = 'mt-1 text-sm font-bold text-rose-400';
+
+      document.getElementById('detail-duration').textContent = `${entry.duration_ms} ms`;
+      document.getElementById('detail-proto').textContent = entry.proto || 'HTTP/1.1';
+      document.getElementById('detail-bytes').textContent = formatBytes(entry.bytes_sent || 0);
+
+      const incomingURL = `https://${entry.host}${entry.path}`;
+      const targetURL = entry.target_url === 'internal' ? 'Internal Reverse.Local Management API / Web UI' : `${entry.target_url}${entry.path}`;
+      document.getElementById('detail-incoming-url').textContent = incomingURL;
+      document.getElementById('detail-target-url').textContent = targetURL;
+
+      document.getElementById('detail-client-ip').textContent = entry.client_ip || '127.0.0.1';
+      document.getElementById('detail-user-agent').textContent = entry.user_agent || '-';
+      document.getElementById('detail-timestamp-sub').textContent = entry.timestamp ? new Date(entry.timestamp).toLocaleTimeString() : '-';
+      document.getElementById('detail-timestamp-full').textContent = entry.timestamp ? `${new Date(entry.timestamp).toLocaleString()} (${entry.timestamp})` : '-';
+
+      // Error Diagnosis Banner
+      const errorBox = document.getElementById('detail-error-box');
+      if (entry.error || entry.status_code >= 400) {
+        errorBox.classList.remove('hidden');
+        document.getElementById('detail-error-msg').textContent = entry.error || `HTTP ${entry.status_code}: ${statusText}`;
+        let hint = 'Check network and upstream server configuration.';
+        if (entry.status_code === 502) {
+          hint = `Could not connect to ${entry.target_url}. Please ensure your local server or development process is running and actively listening on that port.`;
+        } else if (entry.status_code === 404) {
+          hint = `Domain ${entry.host} is not registered in Reverse.Local. Add it to Routes above to route traffic.`;
+        } else if (entry.status_code === 503) {
+          hint = `Route for ${entry.host} is currently disabled. Toggle it active in the Routes table.`;
+        }
+        document.getElementById('detail-error-hint').textContent = hint;
+      } else {
+        errorBox.classList.add('hidden');
+      }
+
+      // cURL command
+      const curlCmd = `curl -k -i -X ${entry.method} "${incomingURL}"`;
+      document.getElementById('detail-curl-command').textContent = curlCmd;
+
+      modal.classList.remove('hidden');
+    }
+
+    function closeLogDetailModal() {
+      document.getElementById('log-detail-modal').classList.add('hidden');
+      selectedLogEntry = null;
+    }
+
+    function copyDetailCurl() {
+      if (!selectedLogEntry) return;
+      const curlCmd = `curl -k -i -X ${selectedLogEntry.method} "https://${selectedLogEntry.host}${selectedLogEntry.path}"`;
+      navigator.clipboard.writeText(curlCmd).then(() => {
+        showToast('cURL command copied to clipboard', 'success');
+      }).catch(() => {
+        showToast('Failed to copy command', 'error');
+      });
+    }
+
+    function exportLogsJSON() {
+      if (logs.length === 0) {
+        showToast('No logs to export', 'info');
+        return;
+      }
+      const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(logs, null, 2));
+      const downloadAnchor = document.createElement('a');
+      const filename = `reverse-local-logs-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+      downloadAnchor.setAttribute('href', dataStr);
+      downloadAnchor.setAttribute('download', filename);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+      showToast(`Exported ${logs.length} access logs to ${filename}`, 'success');
+    }
+
+    function formatBytes(bytes) {
+      if (!bytes || bytes <= 0) return '0 B';
+      const k = 1024;
+      const sizes = ['B', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    }
+
+    function getStatusText(code) {
+      const statusMap = {
+        200: 'OK', 201: 'Created', 204: 'No Content',
+        301: 'Moved Permanently', 302: 'Found', 304: 'Not Modified',
+        400: 'Bad Request', 401: 'Unauthorized', 403: 'Forbidden', 404: 'Not Found', 405: 'Method Not Allowed',
+        500: 'Internal Server Error', 502: 'Bad Gateway', 503: 'Service Unavailable', 504: 'Gateway Timeout'
+      };
+      return statusMap[code] || 'Status';
+    }
+
+    function escapeHTML(str) {
+      if (!str) return '';
+      return str.replace(/[&<>'"]/g, tag => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+      }[tag] || tag));
+    }
+
+    // -------------------------------------------------------------
+    // ROUTES & CONFIG MANAGEMENT
+    // -------------------------------------------------------------
+    function setFilter(filter) {
+      currentFilter = filter;
+      document.querySelectorAll('#tab-all, #tab-active, #tab-inactive').forEach(el => {
+        el.className = 'px-3 py-1 text-slate-400 hover:text-white font-mono text-xs rounded transition-colors';
+      });
+      const activeTab = document.getElementById(`tab-${filter}`);
+      if (activeTab) {
+        activeTab.className = 'px-3 py-1 bg-[#1e293b] text-[#10b981] font-mono text-xs font-semibold rounded';
+      }
+      renderRoutes();
+    }
+
+    async function fetchStatus() {
+      try {
+        const res = await fetch('/api/status');
+        if (!res.ok) return;
+        const data = await res.json();
+
+        const caText = document.getElementById('ca-status-text');
+        const btnInstallCA = document.getElementById('btn-install-ca');
+
+        if (data.ca_installed) {
+          caText.textContent = 'Active (Trusted)';
+          caText.className = 'text-[#06b6d4] font-medium';
+          btnInstallCA.classList.add('hidden');
+        } else {
+          caText.textContent = 'Untrusted';
+          caText.className = 'text-amber-400 font-medium';
+          btnInstallCA.classList.remove('hidden');
+        }
+
+        document.getElementById('stat-total-count').textContent = `${data.total_routes} registered`;
+        document.getElementById('stat-active-count').textContent = data.active_routes;
+      } catch (err) {
+        console.warn('Status fetch error:', err);
+      }
+    }
+
+    async function fetchRoutes() {
+      const spinner = document.getElementById('refresh-spinner');
+      spinner.classList.add('animate-spin');
+      try {
+        const res = await fetch('/api/routes');
+        if (!res.ok) throw new Error('Failed to load routes');
+        routes = await res.json();
+        renderRoutes();
+        updatePortsList();
+      } catch (err) {
+        showToast(err.message, 'error');
+      } finally {
+        setTimeout(() => spinner.classList.remove('animate-spin'), 350);
+      }
+    }
+
+    async function fetchRoutesQuiet() {
+      try {
+        const res = await fetch('/api/routes');
+        if (!res.ok) return;
+        routes = await res.json();
+        renderRoutes();
+        updatePortsList();
+      } catch (e) {}
+    }
+
+    function updatePortsList() {
+      const ports = new Set(['80', '443']);
+      routes.forEach(r => {
+        try {
+          const u = new URL(r.target_url);
+          if (u.port) ports.add(u.port);
+        } catch(e) {}
+      });
+      document.getElementById('metric-ports').textContent = Array.from(ports).join(', ');
+    }
+
+    function renderRoutes() {
+      const query = (document.getElementById('search-input').value || '').toLowerCase().trim();
+      let filtered = routes.filter(r =>
+        r.domain.toLowerCase().includes(query) || r.target_url.toLowerCase().includes(query)
+      );
+
+      const activeCount = routes.filter(r => r.active).length;
+      const inactiveCount = routes.length - activeCount;
+
+      document.getElementById('filter-all-count').textContent = routes.length;
+      document.getElementById('filter-active-count').textContent = activeCount;
+      document.getElementById('filter-inactive-count').textContent = inactiveCount;
+
+      if (currentFilter === 'active') {
+        filtered = filtered.filter(r => r.active);
+      } else if (currentFilter === 'inactive') {
+        filtered = filtered.filter(r => !r.active);
+      }
+
+      const tbody = document.getElementById('routes-table-body');
+      const emptyState = document.getElementById('empty-state');
+      document.getElementById('stat-active-count').textContent = activeCount;
+      document.getElementById('stat-total-count').textContent = `${routes.length} registered`;
+      document.getElementById('table-showing-count').textContent = filtered.length;
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = '';
+        emptyState.classList.remove('hidden');
+        return;
+      }
+
+      emptyState.classList.add('hidden');
+      tbody.innerHTML = filtered.map(r => {
+        const dateStr = r.created_at ? new Date(r.created_at).toLocaleDateString(undefined, {
+          month: 'short', day: 'numeric', year: 'numeric'
+        }) : '-';
+
+        return `
+          <tr class="hover:bg-[#171f33] transition-colors group ${!r.active ? 'opacity-60' : ''}">
+            <!-- Active Toggle -->
+            <td class="py-3 px-4 whitespace-nowrap">
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" onchange="toggleRoute('${r.id}')" ${r.active ? 'checked' : ''} class="sr-only peer" aria-label="Toggle active status for ${r.domain}">
+                <div class="w-8 h-4 bg-[#1e293b] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-[#10b981]"></div>
+              </label>
+            </td>
+
+            <!-- Domain with HTTPS link -->
+            <td class="py-3 px-4 whitespace-nowrap font-mono font-medium">
+              <div class="flex items-center gap-2">
+                <svg class="w-3.5 h-3.5 text-[#10b981]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                </svg>
+                <a href="https://${r.domain}" target="_blank" rel="noopener noreferrer" class="text-white hover:text-[#10b981] transition flex items-center gap-1.5 group">
+                  <span>https://${r.domain}</span>
+                  <svg class="w-3.5 h-3.5 text-slate-500 group-hover:text-[#10b981] transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                  </svg>
+                </a>
+                ${!r.active ? '<span class="text-[10px] font-sans font-semibold px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">Inactive</span>' : ''}
+              </div>
+            </td>
+
+            <!-- Target URL with Copy -->
+            <td class="py-3 px-4 whitespace-nowrap font-mono">
+              <span class="inline-flex items-center gap-2 px-2.5 py-1 bg-[#0b0f19] border border-[#334155] rounded text-slate-200">
+                <span class="text-[#06b6d4] select-all">${r.target_url}</span>
+                <button onclick="copyToClipboard('${r.target_url}')" title="Copy target URL" class="text-slate-400 hover:text-white transition">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                  </svg>
+                </button>
+              </span>
+            </td>
+
+            <!-- SSL Certificate Status -->
+            <td class="py-3 px-4 whitespace-nowrap">
+              <div class="flex items-center gap-2">
+                <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-[#171f33] text-[#10b981] border border-[#334155]">
+                  Valid (Local CA)
+                </span>
+                <span class="text-slate-400 text-xs">Auto-renew 365d</span>
+              </div>
+            </td>
+
+            <!-- Created Date -->
+            <td class="py-3 px-4 whitespace-nowrap text-slate-400 text-xs hidden md:table-cell">
+              ${dateStr}
+            </td>
+
+            <!-- Actions -->
+            <td class="py-3 px-4 whitespace-nowrap text-right">
+              <div class="flex items-center justify-end gap-1.5">
+                <button onclick="openEditModal('${r.id}')" title="Edit Route" class="p-1.5 text-slate-400 hover:text-white hover:bg-[#1e293b] rounded transition">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path>
+                  </svg>
+                </button>
+                <button onclick="promptDelete('${r.id}', '${r.domain}')" title="Delete Route" class="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded transition">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                  </svg>
+                </button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    async function toggleRoute(id) {
+      try {
+        const res = await fetch(`/api/routes/${id}/toggle`, { method: 'POST' });
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.message || 'Failed to toggle route');
+        }
+        const updated = await res.json();
+        const idx = routes.findIndex(r => r.id === id);
+        if (idx !== -1) routes[idx] = updated;
+        renderRoutes();
+        showToast(`${updated.domain} is now ${updated.active ? 'active' : 'inactive'}`, 'success');
+      } catch (err) {
+        showToast(err.message, 'error');
+        fetchRoutes();
+      }
+    }
+
+    function openAddModal() {
+      document.getElementById('modal-title').textContent = 'Configure Reverse Proxy Route';
+      document.getElementById('form-id').value = '';
+      document.getElementById('form-domain').value = '';
+      document.getElementById('form-target').value = '';
+      document.getElementById('form-active').checked = true;
+      document.getElementById('form-error').classList.add('hidden');
+      updatePreview();
+      document.getElementById('modal').classList.remove('hidden');
+      document.getElementById('form-domain').focus();
+    }
+
+    function openEditModal(id) {
+      const r = routes.find(item => item.id === id);
+      if (!r) return;
+
+      document.getElementById('modal-title').textContent = 'Edit Route Configuration';
+      document.getElementById('form-id').value = r.id;
+      document.getElementById('form-domain').value = r.domain;
+      document.getElementById('form-target').value = r.target_url;
+      document.getElementById('form-active').checked = r.active;
+      document.getElementById('form-error').classList.add('hidden');
+      updatePreview();
+      document.getElementById('modal').classList.remove('hidden');
+    }
+
+    function closeModal() {
+      document.getElementById('modal').classList.add('hidden');
+    }
+
+    function appendSuffix(suffix) {
+      const input = document.getElementById('form-domain');
+      let val = input.value.trim().replace(/\.(local|test|dev|internal)$/, '');
+      input.value = val ? val + suffix : 'app' + suffix;
+      updatePreview();
+    }
+
+    function setTargetPreset(target) {
+      document.getElementById('form-target').value = target;
+      updatePreview();
+    }
+
+    function updatePreview() {
+      const domain = document.getElementById('form-domain').value.trim() || 'myapp.local';
+      let target = document.getElementById('form-target').value.trim() || 'http://127.0.0.1:3000';
+      if (!target.startsWith('http://') && !target.startsWith('https://')) {
+        target = 'http://' + target;
+      }
+      document.getElementById('preview-domain').textContent = `https://${domain}`;
+      document.getElementById('preview-target').textContent = target;
+    }
+
+    async function handleFormSubmit(e) {
+      e.preventDefault();
+      const id = document.getElementById('form-id').value;
+      const domain = document.getElementById('form-domain').value.trim();
+      const target_url = document.getElementById('form-target').value.trim();
+      const active = document.getElementById('form-active').checked;
+      const errorEl = document.getElementById('form-error');
+
+      errorEl.classList.add('hidden');
+
+      const btn = document.getElementById('btn-save-route');
+      const originalText = btn.textContent;
+      btn.textContent = 'Saving...';
+      btn.disabled = true;
+
+      try {
+        let res;
+        if (id) {
+          res = await fetch(`/api/routes/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ domain, target_url, active })
+          });
+        } else {
+          res = await fetch('/api/routes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ domain, target_url })
+          });
+        }
+
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.message || 'Failed to save route');
+        }
+
+        closeModal();
+        await fetchRoutes();
+        showToast(id ? 'Route updated successfully' : 'Domain added to hosts & proxy', 'success');
+      } catch (err) {
+        errorEl.textContent = err.message;
+        errorEl.classList.remove('hidden');
+      } finally {
+        btn.textContent = originalText;
+        btn.disabled = false;
+      }
+    }
+
+    function promptDelete(id, domain) {
+      routeToDeleteId = id;
+      document.getElementById('delete-domain-name').textContent = domain;
+      document.getElementById('delete-modal').classList.remove('hidden');
+    }
+
+    function closeDeleteModal() {
+      routeToDeleteId = null;
+      document.getElementById('delete-modal').classList.add('hidden');
+    }
+
+    async function executeDelete() {
+      if (!routeToDeleteId) return;
+      const btn = document.getElementById('btn-confirm-delete');
+      btn.disabled = true;
+      btn.textContent = 'Deleting...';
+
+      try {
+        const res = await fetch(`/api/routes/${routeToDeleteId}`, { method: 'DELETE' });
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.message || 'Failed to delete route');
+        }
+        closeDeleteModal();
+        await fetchRoutes();
+        showToast('Route removed from hosts and proxy', 'success');
+      } catch (err) {
+        showToast(err.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Delete';
+      }
+    }
+
+    async function installRootCA() {
+      const btn = document.getElementById('btn-install-ca');
+      btn.disabled = true;
+      btn.textContent = 'Installing...';
+
+      try {
+        const res = await fetch('/api/ca/install', { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Installation failed');
+        showToast(data.message || 'Root CA installed successfully', 'success');
+        fetchStatus();
+      } catch (err) {
+        showToast(err.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Install CA';
+      }
+    }
+
+    function copyToClipboard(text) {
+      navigator.clipboard.writeText(text).then(() => {
+        showToast(`Copied ${text} to clipboard`, 'info');
+      }).catch(() => {
+        showToast('Could not copy to clipboard', 'error');
+      });
+    }
+
+    function scrollToRoutes() {
+      document.getElementById('section-routes').scrollIntoView({ behavior: 'smooth' });
+    }
+    function scrollToLogs() {
+      document.getElementById('section-logs').scrollIntoView({ behavior: 'smooth' });
+    }
+    function scrollToCert() {
+      document.getElementById('section-cert').scrollIntoView({ behavior: 'smooth' });
+    }
+    function scrollToHosts() {
+      document.getElementById('section-hosts').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      toast.className = `pointer-events-auto flex items-center space-x-2.5 px-3.5 py-2.5 rounded border text-xs font-mono transition-all duration-200 transform translate-y-2 opacity-0 ${
+        type === 'success' ? 'bg-[#0f172a] border-[#10b981]/50 text-[#34d399]' :
+        type === 'error' ? 'bg-[#0f172a] border-rose-500/50 text-rose-300' :
+        'bg-[#0f172a] border-[#334155] text-slate-200'
+      }`;
+
+      const icon = type === 'success' ? `
+        <svg class="w-4 h-4 text-[#10b981] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+        </svg>
+      ` : type === 'error' ? `
+        <svg class="w-4 h-4 text-rose-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+        </svg>
+      ` : `
+        <svg class="w-4 h-4 text-[#06b6d4] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+      `;
+
+      toast.innerHTML = `
+        ${icon}
+        <span class="flex-1">${message}</span>
+        <button onclick="this.parentElement.remove()" class="text-slate-400 hover:text-white transition ml-2">&times;</button>
+      `;
+
+      container.appendChild(toast);
+      requestAnimationFrame(() => {
+        toast.classList.remove('translate-y-2', 'opacity-0');
+      });
+
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-y-2');
+        setTimeout(() => toast.remove(), 250);
+      }, 3500);
+    }
+  </script>
+</body>
+</html>
