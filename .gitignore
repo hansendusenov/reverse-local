@@ -15,9 +15,14 @@ reverse-local-debug
 
 # User runtime configuration & local certificates (store in user config dir)
 routes.json
+settings.json
+tunnels.json
 ca.crt
 ca.key
 *.pem
+.env
+.env.*
+!.env.example
 
 # Operating System & IDE metadata
 .DS_Store

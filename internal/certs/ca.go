@@ -145,11 +145,22 @@ func (m *CAManager) generateLeafCertificate(domain string) (*tls.Certificate, er
 	}
 
 	dnsNames := []string{domain}
-	var ipAddresses []net.IP
+	ipAddresses := []net.IP{net.ParseIP("127.0.0.1"), net.IPv6loopback}
 
 	if domain == "reverse.local" {
 		dnsNames = append(dnsNames, "localhost")
-		ipAddresses = append(ipAddresses, net.ParseIP("127.0.0.1"), net.IPv6loopback)
+	}
+
+	// Include local LAN IPv4 addresses in SANs so devices on the same network
+	// can verify TLS certificates when connecting over LAN.
+	if addrs, err := net.InterfaceAddrs(); err == nil {
+		for _, a := range addrs {
+			if ipNet, ok := a.(*net.IPNet); ok && !ipNet.IP.IsLoopback() {
+				if ip4 := ipNet.IP.To4(); ip4 != nil {
+					ipAddresses = append(ipAddresses, ip4)
+				}
+			}
+		}
 	}
 
 	if ip := net.ParseIP(domain); ip != nil {

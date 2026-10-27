@@ -1,22 +1,28 @@
 # Reverse.Local
 
-Portable, cross-platform local reverse proxy, automatic `hosts` file manager, and local SSL/TLS certificate generator in Go, controlled via a System Tray icon and a self-hosted Web UI Dashboard.
+Portable, cross-platform local reverse proxy, automatic `hosts` file manager, local SSL/TLS certificate generator, and native Go SSH port forwarder (`-L -N`), controlled via a System Tray icon, a compact Desktop Control Panel, and a self-hosted Browser Workbench.
 
 **Engineered by Hansen Dusenov** • Copyright &copy; 2026 Hansen Dusenov. All rights reserved.
 
-> 📖 **Panduan Kompilasi & Build Lengkap (Bahasa Indonesia)**: Lihat [BUILD.md](file:///d:/Code/reverse_local/BUILD.md) untuk panduan compile release silent tray, script build otomatis `build.bat`, cross-compilation, dan setup administrator.
+> **Complete Compilation & Build Guide**: See [BUILD.md](file:///d:/Code/reverse_local/BUILD.md) for instructions on building the silent system tray executable, running the automated `build.bat` and `build.sh` scripts, cross-compiling, and configuring Administrator/root privileges.
 
 ---
 
 ## Features
 
-- **System Tray Background Utility**: Runs silently in the system tray with quick-actions:
-  - **Open Dashboard**: One-click opening of `https://reverse.local` in your default browser.
-  - **Restart / Reload**: Instantly reloads configurations and re-syncs OS hosts.
-  - **Quit**: Automatically strips managed entries from your OS hosts file and exits cleanly.
-- **Self-Hosted Web Dashboard (`https://reverse.local`)**:
-  - Embedded directly into the single Go binary (`//go:embed`). No external assets or node_modules needed.
-  - Tailwind CSS dark developer aesthetic with real-time route preview, active/inactive toggles, copy helpers, and toast notifications.
+- **System Tray & Frameless Desktop Control Panel (`GET /control`)**:
+  - **Open Control Panel (Settings)**: Launches a compact 480x640px desktop utility window (`--app` mode) for daemon settings (`settings.json`), HTTP/HTTPS port configuration, `127.0.0.1` vs `0.0.0.0` LAN binding, OS Startup registration, Root CA installation, and 1-click OS DNS cache flushing.
+  - **Open Browser Workbench**: Opens `https://reverse.local` in your default web browser for full-screen domain routing, SSH tunnel management, and live traffic inspection.
+  - **Sync Hosts & Flush DNS**: Synchronizes active domains with the OS `hosts` file and flushes the OS DNS resolver cache.
+  - **Quit**: Automatically strips managed entries from your OS `hosts` file, closes active SSH tunnels, and exits cleanly.
+- **Native Go SSH Port Forwarding (`-L -N`)**:
+  - Built-in pure-Go SSH client (`golang.org/x/crypto/ssh`) for local port forwarding (`127.0.0.1:<local_port> -> <remote_host>:<remote_port>`) with zero external `ssh.exe` child processes.
+  - Supports **Private Key** (`~/.ssh/id_ed25519`, `~/.ssh/id_rsa`, custom PEM path with optional passphrase), **Password**, and **SSH Agent** authentication.
+  - Real-time connection status, active stream counters, RX/TX byte telemetry, SSH keepalive pings, and automatic reconnection with exponential backoff.
+  - **1-Click Bind to Domain**: Map any forwarded SSH port directly to an HTTPS `.local` domain in the Workbench.
+- **Self-Hosted Browser Workbench (`https://reverse.local`)**:
+  - Embedded directly into the single Go binary (`//go:embed`). No external assets or `node_modules` needed.
+  - Industrial Split-Pane Workbench (`DESIGN.md`) with inline Quick-Bind composer, active/paused toggles, copy helpers, and live SSE traffic stream.
   - Direct REST API for programmatic automation.
 - **Dynamic On-The-Fly SSL/TLS Certificates**:
   - Generates a local Root Certificate Authority (CA) upon first launch.
@@ -75,12 +81,19 @@ reverse-local/
 │   ├── logger/
 │   │   ├── logger.go        # Thread-safe ring buffer, SSE broadcasting & filtering
 │   │   └── logger_test.go
-│   └── proxy/
-│       ├── server.go        # HTTP/HTTPS servers, Dynamic Reverse Proxy, and REST API router
-│       └── server_test.go
+│   ├── proxy/
+│   │   ├── server.go        # HTTP/HTTPS servers, Dynamic Reverse Proxy, and REST API router
+│   │   └── server_test.go
+│   ├── settings/
+│   │   ├── settings.go      # Thread-safe daemon settings (settings.json) & OS utilities
+│   │   └── settings_test.go
+│   └── tunnel/
+│       ├── manager.go       # Native Go SSH local port forwarding (-L -N) engine
+│       └── manager_test.go
 └── web/
     ├── web.go              # go:embed wrapper for embedded assets
-    └── index.html          # Embedded Dashboard UI (HTML + Vanilla JS + Tailwind CSS)
+    ├── control.html        # Embedded 480x640 Desktop Control Panel UI
+    └── index.html          # Embedded Browser Workbench UI (HTML + Vanilla JS + Tailwind CSS)
 ```
 
 ---
@@ -136,8 +149,9 @@ Modifying the system `hosts` file and binding to privileged standard ports (:80 
 | Flag | Default | Description |
 |---|---|---|
 | `-headless` | `false` | Run in daemon/console mode without system tray |
-| `-http` | `80` | HTTP listening port (redirects to HTTPS) |
-| `-https` | `443` | HTTPS listening port (reverse proxy & dashboard) |
+| `-control` | `false` | Open the compact Desktop Control Panel window on startup |
+| `-http` | `80` (or `settings.json`) | HTTP listening port (redirects to HTTPS) |
+| `-https` | `443` (or `settings.json`) | HTTPS listening port (reverse proxy & dashboard) |
 | `-config` | OS User Config Dir | Path to `routes.json` |
 | `-hosts` | OS Default (`/etc/hosts` or System32) | Path to OS hosts file |
 | `-certs` | OS User Config Dir | Directory storing Root CA (`ca.crt` & `ca.key`) |

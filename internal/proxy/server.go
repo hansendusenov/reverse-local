@@ -12,27 +12,40 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"reverse-local/internal/assets"
 	"reverse-local/internal/certs"
 	"reverse-local/internal/config"
 	"reverse-local/internal/hosts"
+	"reverse-local/internal/lan"
 	"reverse-local/internal/logger"
+	"reverse-local/internal/settings"
+	"reverse-local/internal/tunnel"
 	"reverse-local/web"
 )
 
-// Server coordinates the HTTP (80) and HTTPS (443) reverse proxy and REST API.
+// Server coordinates the HTTP (80) and HTTPS (443) reverse proxy, SSH tunnels, LAN DNS broadcaster, and REST API.
 type Server struct {
-	store        *config.Store
-	hostsManager *hosts.Manager
-	caManager    *certs.CAManager
-	logger       *logger.Logger
-	httpPort     int
-	httpsPort    int
+	store          *config.Store
+	hostsManager   *hosts.Manager
+	caManager      *certs.CAManager
+	settingsStore  *settings.Store
+	tunnelManager  *tunnel.Manager
+	lanBroadcaster *lan.Broadcaster
+	logger         *logger.Logger
+	httpPort       int
+	httpsPort      int
+	bindAddress    string
+
+	stateMu      sync.RWMutex
+	proxyEnabled bool
+	isRunning    bool
 
 	httpServer  *http.Server
 	httpsServer *http.Server
@@ -45,16 +58,60 @@ type Server struct {
 
 // Config provides configuration options for the Server.
 type Config struct {
-	Store        *config.Store
-	HostsManager *hosts.Manager
-	CAManager    *certs.CAManager
-	Logger       *logger.Logger
-	HTTPPort     int
-	HTTPSPort    int
+	Store         *config.Store
+	HostsManager  *hosts.Manager
+	CAManager     *certs.CAManager
+	SettingsStore *settings.Store
+	TunnelManager *tunnel.Manager
+	Logger        *logger.Logger
+	HTTPPort      int
+	HTTPSPort     int
 }
 
-// NewServer initializes the proxy and API server.
+// NewServer initializes the proxy, settings, SSH tunnel manager, and API server.
 func NewServer(cfg Config) *Server {
+	baseDir := ""
+	if cfg.Store != nil && cfg.Store.FilePath() != "" {
+		baseDir = filepath.Dir(cfg.Store.FilePath())
+	}
+
+	if cfg.SettingsStore == nil {
+		settingsPath := ""
+		if baseDir != "" {
+			settingsPath = filepath.Join(baseDir, "settings.json")
+		}
+		if st, err := settings.NewStore(settingsPath); err == nil {
+			cfg.SettingsStore = st
+		}
+	}
+
+	if cfg.TunnelManager == nil {
+		tunnelsPath := ""
+		if baseDir != "" {
+			tunnelsPath = filepath.Join(baseDir, "tunnels.json")
+		}
+		if tm, err := tunnel.NewManager(tunnelsPath); err == nil {
+			cfg.TunnelManager = tm
+		}
+	}
+
+	bindAddr := "127.0.0.1"
+	if cfg.SettingsStore != nil {
+		saved := cfg.SettingsStore.Get()
+		if cfg.HTTPPort == 0 {
+			cfg.HTTPPort = saved.HTTPPort
+		}
+		if cfg.HTTPSPort == 0 {
+			cfg.HTTPSPort = saved.HTTPSPort
+		}
+		if saved.BindAddress != "" {
+			bindAddr = saved.BindAddress
+		}
+		if cfg.TunnelManager != nil {
+			cfg.TunnelManager.SetPolicies(saved.SSHKeepAliveSec, saved.SSHAutoReconnect)
+		}
+	}
+
 	if cfg.HTTPPort == 0 {
 		cfg.HTTPPort = 80
 	}
@@ -66,40 +123,96 @@ func NewServer(cfg Config) *Server {
 	}
 
 	s := &Server{
-		store:        cfg.Store,
-		hostsManager: cfg.HostsManager,
-		caManager:    cfg.CAManager,
-		logger:       cfg.Logger,
-		httpPort:     cfg.HTTPPort,
-		httpsPort:    cfg.HTTPSPort,
-		proxyCache:   make(map[string]*httputil.ReverseProxy),
+		store:         cfg.Store,
+		hostsManager:  cfg.HostsManager,
+		caManager:     cfg.CAManager,
+		settingsStore: cfg.SettingsStore,
+		tunnelManager: cfg.TunnelManager,
+		logger:        cfg.Logger,
+		httpPort:      cfg.HTTPPort,
+		httpsPort:     cfg.HTTPSPort,
+		bindAddress:   bindAddr,
+		proxyEnabled:  true,
+		proxyCache:    make(map[string]*httputil.ReverseProxy),
 	}
+
+	dnsPort := 53
+	if s.settingsStore != nil && s.settingsStore.Get().LANDNSPort > 0 {
+		dnsPort = s.settingsStore.Get().LANDNSPort
+	}
+	s.lanBroadcaster = lan.NewBroadcaster(func(domain string) bool {
+		if s.store == nil {
+			return false
+		}
+		r, found := s.store.GetByDomain(domain)
+		return found && r.Active
+	}, dnsPort)
 
 	s.setupAPIRouter()
 	return s
 }
 
-// Start begins listening on HTTP and HTTPS in background goroutines.
+// Start begins listening on HTTP and HTTPS in background goroutines, starts LAN DNS/mDNS broadcast, and connects auto-start SSH tunnels.
 func (s *Server) Start() error {
 	// Sync active routes with hosts file on startup
 	if err := s.syncHosts(); err != nil {
 		log.Printf("[WARN] Initial hosts sync notice: %v", err)
 	}
 
+	if err := s.startListeners(); err != nil {
+		return err
+	}
+
+	s.syncLANBroadcaster()
+
+	if s.tunnelManager != nil {
+		go s.tunnelManager.StartAutoConnect()
+	}
+
+	return nil
+}
+
+func (s *Server) syncLANBroadcaster() {
+	if s.lanBroadcaster == nil {
+		return
+	}
+	cfg := settings.DefaultSettings()
+	if s.settingsStore != nil {
+		cfg = s.settingsStore.Get()
+	}
+	if cfg.LANBroadcast {
+		_ = s.lanBroadcaster.Start(true, cfg.LANDNSPort)
+	} else {
+		s.lanBroadcaster.Stop()
+	}
+}
+
+func (s *Server) startListeners() error {
+	s.stateMu.Lock()
+	defer s.stateMu.Unlock()
+
+	bindPrefix := ""
+	if s.bindAddress == "127.0.0.1" {
+		bindPrefix = "127.0.0.1"
+	}
+
+	httpPort := s.httpPort
+	httpsPort := s.httpsPort
+
 	// 1. HTTP Server (Port 80) -> Redirect to HTTPS
 	httpMux := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		host := stripPort(r.Host)
 		var target string
-		if s.httpsPort == 443 {
+		if httpsPort == 443 {
 			target = fmt.Sprintf("https://%s%s", host, r.RequestURI)
 		} else {
-			target = fmt.Sprintf("https://%s:%d%s", host, s.httpsPort, r.RequestURI)
+			target = fmt.Sprintf("https://%s:%d%s", host, httpsPort, r.RequestURI)
 		}
 		http.Redirect(w, r, target, http.StatusMovedPermanently)
 	})
 
 	s.httpServer = &http.Server{
-		Addr:         fmt.Sprintf(":%d", s.httpPort),
+		Addr:         fmt.Sprintf("%s:%d", bindPrefix, httpPort),
 		Handler:      httpMux,
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 30 * time.Second,
@@ -112,40 +225,71 @@ func (s *Server) Start() error {
 	}
 
 	s.httpsServer = &http.Server{
-		Addr:         fmt.Sprintf(":%d", s.httpsPort),
+		Addr:         fmt.Sprintf("%s:%d", bindPrefix, httpsPort),
 		Handler:      s,
 		TLSConfig:    tlsConfig,
 		ReadTimeout:  60 * time.Second,
 		WriteTimeout: 60 * time.Second,
 	}
 
+	s.isRunning = true
+
 	// Start HTTP listener
-	go func() {
-		log.Printf("[INFO] HTTP server listening on :%d (redirecting to HTTPS)", s.httpPort)
-		if err := s.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+	go func(srv *http.Server, addr string) {
+		log.Printf("[INFO] HTTP server listening on %s (redirecting to HTTPS)", addr)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Printf("[ERROR] HTTP server error: %v", err)
 		}
-	}()
+	}(s.httpServer, s.httpServer.Addr)
 
 	// Start HTTPS listener
-	go func() {
-		log.Printf("[INFO] HTTPS reverse proxy listening on :%d", s.httpsPort)
-		if err := s.httpsServer.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
+	go func(srv *http.Server, addr string) {
+		log.Printf("[INFO] HTTPS reverse proxy listening on %s", addr)
+		if err := srv.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
 			log.Printf("[ERROR] HTTPS server error: %v", err)
 		}
-	}()
+	}(s.httpsServer, s.httpsServer.Addr)
 
 	return nil
 }
 
-// Stop gracefully shuts down both HTTP and HTTPS servers.
+// Stop gracefully shuts down both HTTP and HTTPS servers and all active SSH tunnels.
 func (s *Server) Stop() {
+	s.stateMu.Lock()
+	s.isRunning = false
 	if s.httpServer != nil {
 		_ = s.httpServer.Close()
 	}
 	if s.httpsServer != nil {
 		_ = s.httpsServer.Close()
 	}
+	s.stateMu.Unlock()
+
+	if s.lanBroadcaster != nil {
+		s.lanBroadcaster.Stop()
+	}
+	if s.tunnelManager != nil {
+		s.tunnelManager.StopAll()
+	}
+}
+
+// HTTPSPort returns the currently configured HTTPS listening port.
+func (s *Server) HTTPSPort() int {
+	s.stateMu.RLock()
+	defer s.stateMu.RUnlock()
+	return s.httpsPort
+}
+
+// TunnelManager returns the server's native Go SSH tunnel manager.
+func (s *Server) TunnelManager() *tunnel.Manager {
+	return s.tunnelManager
+}
+
+// IsProxyEnabled returns whether virtual-host reverse proxy forwarding is enabled.
+func (s *Server) IsProxyEnabled() bool {
+	s.stateMu.RLock()
+	defer s.stateMu.RUnlock()
+	return s.proxyEnabled
 }
 
 // ServeHTTP handles incoming HTTPS requests, logs traffic, and routes requests.
@@ -163,6 +307,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// 1. Reserved domain or localhost -> Serve Web UI & API
 	if host == "reverse.local" || host == "localhost" || host == "127.0.0.1" || host == "::1" {
 		s.apiMux.ServeHTTP(lrw, r)
+	} else if !s.IsProxyEnabled() {
+		routeErr = "Proxy forwarding paused"
+		renderNotFoundPage(lrw, host, true)
 	} else {
 		// 2. User configured domain -> Reverse proxy
 		route, found := s.store.GetByDomain(host)
@@ -285,7 +432,7 @@ func (s *Server) getOrCreateProxy(targetURLStr string) *httputil.ReverseProxy {
 func (s *Server) setupAPIRouter() {
 	mux := http.NewServeMux()
 
-	// 1. Dashboard Web UI & CA download
+	// 1. Dashboard Web UI, Desktop Control Panel & CA download
 	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" && r.URL.Path != "/index.html" {
 			http.NotFound(w, r)
@@ -297,7 +444,34 @@ func (s *Server) setupAPIRouter() {
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
 		_, _ = w.Write(indexHTML)
+	})
+
+	mux.HandleFunc("GET /control", func(w http.ResponseWriter, r *http.Request) {
+		controlHTML, err := web.Content.ReadFile("control.html")
+		if err != nil {
+			http.Error(w, "Control Panel UI not found", http.StatusInternalServerError)
+			return
+		}
+		settings.EnforceFixedControlPanelWindow()
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
+		_, _ = w.Write(controlHTML)
+	})
+
+	mux.HandleFunc("GET /favicon.ico", func(w http.ResponseWriter, r *http.Request) {
+		_, icoBytes := assets.GetAppIcons()
+		w.Header().Set("Content-Type", "image/x-icon")
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		_, _ = w.Write(icoBytes)
+	})
+
+	mux.HandleFunc("GET /icon.png", func(w http.ResponseWriter, r *http.Request) {
+		pngBytes, _ := assets.GetAppIcons()
+		w.Header().Set("Content-Type", "image/png")
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		_, _ = w.Write(pngBytes)
 	})
 
 	mux.HandleFunc("GET /ca.crt", func(w http.ResponseWriter, r *http.Request) {
@@ -307,7 +481,7 @@ func (s *Server) setupAPIRouter() {
 		_, _ = w.Write(pemBytes)
 	})
 
-	// 2. REST API endpoints
+	// 2. REST API endpoints (Status, Routes, CA)
 	mux.HandleFunc("GET /api/status", s.handleGetStatus)
 	mux.HandleFunc("GET /api/routes", s.handleGetRoutes)
 	mux.HandleFunc("POST /api/routes", s.handleCreateRoute)
@@ -316,7 +490,24 @@ func (s *Server) setupAPIRouter() {
 	mux.HandleFunc("POST /api/routes/{id}/toggle", s.handleToggleRoute)
 	mux.HandleFunc("POST /api/ca/install", s.handleInstallCA)
 
-	// 3. Access Logs endpoints
+	// 3. Daemon Settings & System Actions endpoints
+	mux.HandleFunc("GET /api/settings", s.handleGetSettings)
+	mux.HandleFunc("PUT /api/settings", s.handleUpdateSettings)
+	mux.HandleFunc("POST /api/system/action", s.handleSystemAction)
+
+	// 4. Native Go SSH Tunnels (-L -N) endpoints
+	mux.HandleFunc("GET /api/tunnels", s.handleGetTunnels)
+	mux.HandleFunc("POST /api/tunnels", s.handleCreateTunnel)
+	mux.HandleFunc("PUT /api/tunnels/{id}", s.handleUpdateTunnel)
+	mux.HandleFunc("DELETE /api/tunnels/{id}", s.handleDeleteTunnel)
+	mux.HandleFunc("POST /api/tunnels/{id}/start", s.handleStartTunnel)
+	mux.HandleFunc("POST /api/tunnels/{id}/stop", s.handleStopTunnel)
+
+	// 5. Configuration Backup & Restore endpoints
+	mux.HandleFunc("GET /api/backup", s.handleExportBackup)
+	mux.HandleFunc("POST /api/backup/restore", s.handleRestoreBackup)
+
+	// 6. Access Logs endpoints
 	mux.HandleFunc("GET /api/logs", s.handleGetLogs)
 	mux.HandleFunc("DELETE /api/logs", s.handleClearLogs)
 	mux.HandleFunc("GET /api/logs/stream", s.handleStreamLogs)
@@ -330,14 +521,66 @@ func (s *Server) handleGetStatus(w http.ResponseWriter, r *http.Request) {
 	activeCount := len(s.store.GetActiveDomains())
 	totalCount := len(s.store.GetAll())
 
+	activeTunnels := 0
+	totalTunnels := 0
+	if s.tunnelManager != nil {
+		activeTunnels, totalTunnels = s.tunnelManager.Counts()
+	}
+
+	s.stateMu.RLock()
+	httpPort := s.httpPort
+	httpsPort := s.httpsPort
+	bindAddr := s.bindAddress
+	proxyEnabled := s.proxyEnabled
+	s.stateMu.RUnlock()
+
+	configDir := ""
+	if s.settingsStore != nil {
+		configDir = s.settingsStore.ConfigDir()
+	} else if s.store != nil {
+		configDir = filepath.Dir(s.store.FilePath())
+	}
+
+	hostsPath := ""
+	if s.hostsManager != nil {
+		hostsPath = s.hostsManager.Path()
+	}
+
+	lanIP := lan.DetectLANIP()
+	lanActive := false
+	lanQueries := uint64(0)
+	if s.lanBroadcaster != nil {
+		lanIP = s.lanBroadcaster.LANIP()
+		lanActive = s.lanBroadcaster.IsRunning()
+		lanQueries = s.lanBroadcaster.QueriesAnswered()
+	}
+	lanEnabled := true
+	lanPort := 53
+	if s.settingsStore != nil {
+		st := s.settingsStore.Get()
+		lanEnabled = st.LANBroadcast
+		lanPort = st.LANDNSPort
+	}
+
 	respondJSON(w, http.StatusOK, map[string]interface{}{
-		"status":        "running",
-		"http_port":     s.httpPort,
-		"https_port":    s.httpsPort,
-		"ca_installed":  s.caManager.IsInstalled(),
-		"active_routes": activeCount,
-		"total_routes":  totalCount,
-		"os":            runtime.GOOS,
+		"status":               "running",
+		"proxy_enabled":        proxyEnabled,
+		"bind_address":         bindAddr,
+		"http_port":            httpPort,
+		"https_port":           httpsPort,
+		"ca_installed":         s.caManager.IsInstalled(),
+		"active_routes":        activeCount,
+		"total_routes":         totalCount,
+		"active_tunnels":       activeTunnels,
+		"total_tunnels":        totalTunnels,
+		"lan_ip":               lanIP,
+		"lan_broadcast":        lanEnabled,
+		"lan_broadcast_active": lanActive,
+		"lan_dns_port":         lanPort,
+		"lan_dns_queries":      lanQueries,
+		"config_dir":           configDir,
+		"hosts_path":           hostsPath,
+		"os":                   runtime.GOOS,
 	})
 }
 
@@ -441,6 +684,394 @@ func (s *Server) handleInstallCA(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
+	if s.settingsStore == nil {
+		respondJSON(w, http.StatusOK, settings.DefaultSettings())
+		return
+	}
+	respondJSON(w, http.StatusOK, s.settingsStore.Get())
+}
+
+func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
+	if s.settingsStore == nil {
+		respondError(w, http.StatusInternalServerError, "Settings store not initialized")
+		return
+	}
+
+	var input settings.Settings
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid JSON payload")
+		return
+	}
+
+	updated, err := s.settingsStore.Update(input)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	if s.tunnelManager != nil {
+		s.tunnelManager.SetPolicies(updated.SSHKeepAliveSec, updated.SSHAutoReconnect)
+	}
+
+	s.stateMu.Lock()
+	needsListenerReload := s.isRunning && (s.httpPort != updated.HTTPPort || s.httpsPort != updated.HTTPSPort || s.bindAddress != updated.BindAddress)
+	s.httpPort = updated.HTTPPort
+	s.httpsPort = updated.HTTPSPort
+	s.bindAddress = updated.BindAddress
+	if needsListenerReload {
+		if s.httpServer != nil {
+			_ = s.httpServer.Close()
+		}
+		if s.httpsServer != nil {
+			_ = s.httpsServer.Close()
+		}
+	}
+	s.stateMu.Unlock()
+
+	if needsListenerReload {
+		_ = s.startListeners()
+	}
+
+	s.syncLANBroadcaster()
+
+	if updated.AutoSyncHosts {
+		_ = s.forceSyncHosts()
+	}
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"settings": updated,
+		"message":  "Daemon settings saved and applied",
+	})
+}
+
+func (s *Server) handleExportBackup(w http.ResponseWriter, r *http.Request) {
+	var routes []config.Route
+	if s.store != nil {
+		routes = s.store.GetAll()
+	}
+	var tunnels []tunnel.TunnelConfig
+	if s.tunnelManager != nil {
+		tunnels = s.tunnelManager.ExportConfigs()
+	}
+	cfg := settings.DefaultSettings()
+	if s.settingsStore != nil {
+		cfg = s.settingsStore.Get()
+	}
+
+	payload := map[string]interface{}{
+		"version":     "1.0",
+		"exported_at": time.Now().UTC().Format(time.RFC3339),
+		"settings":    cfg,
+		"routes":      routes,
+		"tunnels":     tunnels,
+	}
+
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("Content-Disposition", `attachment; filename="reverse-local-backup.json"`)
+	w.WriteHeader(http.StatusOK)
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	_ = enc.Encode(payload)
+}
+
+func (s *Server) handleRestoreBackup(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		Settings *settings.Settings    `json:"settings"`
+		Routes   []config.Route        `json:"routes"`
+		Tunnels  []tunnel.TunnelConfig `json:"tunnels"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid backup JSON file")
+		return
+	}
+
+	routesImported := 0
+	tunnelsImported := 0
+
+	if s.store != nil && len(payload.Routes) > 0 {
+		n, err := s.store.ReplaceAll(payload.Routes)
+		if err != nil {
+			respondError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to import routes: %v", err))
+			return
+		}
+		routesImported = n
+		_ = s.syncHosts()
+	}
+
+	if s.tunnelManager != nil && len(payload.Tunnels) > 0 {
+		n, err := s.tunnelManager.ImportConfigs(payload.Tunnels)
+		if err != nil {
+			respondError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to import SSH tunnels: %v", err))
+			return
+		}
+		tunnelsImported = n
+	}
+
+	if s.settingsStore != nil && payload.Settings != nil {
+		if updated, err := s.settingsStore.Update(*payload.Settings); err == nil {
+			if s.tunnelManager != nil {
+				s.tunnelManager.SetPolicies(updated.SSHKeepAliveSec, updated.SSHAutoReconnect)
+			}
+			s.syncLANBroadcaster()
+		}
+	}
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"routes_imported":  routesImported,
+		"tunnels_imported": tunnelsImported,
+		"message":          fmt.Sprintf("Restored %d domain route(s) and %d SSH tunnel profile(s) to disk.", routesImported, tunnelsImported),
+	})
+}
+
+func (s *Server) handleSystemAction(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		Action string `json:"action"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid JSON payload")
+		return
+	}
+
+	switch input.Action {
+	case "toggle_proxy":
+		s.stateMu.Lock()
+		s.proxyEnabled = !s.proxyEnabled
+		enabled := s.proxyEnabled
+		s.stateMu.Unlock()
+
+		stateLabel := "resumed"
+		if !enabled {
+			stateLabel = "paused"
+		}
+		respondJSON(w, http.StatusOK, map[string]interface{}{
+			"proxy_enabled": enabled,
+			"message":       fmt.Sprintf("HTTP/HTTPS reverse proxy forwarding %s.", stateLabel),
+		})
+
+	case "sync_hosts":
+		if err := s.forceSyncHosts(); err != nil {
+			respondError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]interface{}{
+			"message": fmt.Sprintf("Synchronized %d active domain(s) with OS hosts file.", len(s.store.GetActiveDomains())),
+		})
+
+	case "flush_dns":
+		out, err := settings.FlushDNSCache()
+		if err != nil {
+			respondError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]interface{}{
+			"message": out,
+		})
+
+	case "open_workbench":
+		urlStr := s.WorkbenchURL("")
+		if err := settings.LaunchBrowser(urlStr); err != nil {
+			respondError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]interface{}{
+			"message": fmt.Sprintf("Opened Workbench (%s) in default browser.", urlStr),
+		})
+
+	case "open_control_panel":
+		urlStr := s.WorkbenchURL("/control")
+		if err := settings.LaunchControlPanelApp(urlStr); err != nil {
+			respondError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]interface{}{
+			"message": "Opened Desktop Control Panel window.",
+		})
+
+	case "open_config_dir":
+		dir := ""
+		if s.settingsStore != nil {
+			dir = s.settingsStore.ConfigDir()
+		} else if s.store != nil {
+			dir = filepath.Dir(s.store.FilePath())
+		}
+		if err := settings.OpenPathInFileManager(dir); err != nil {
+			respondError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]interface{}{
+			"message": fmt.Sprintf("Opened config folder: %s", dir),
+		})
+
+	case "start_auto_tunnels":
+		if s.tunnelManager != nil {
+			go s.tunnelManager.StartAutoConnect()
+		}
+		respondJSON(w, http.StatusOK, map[string]interface{}{
+			"message": "Triggered connection for auto-connect SSH tunnels.",
+		})
+
+	case "stop_all_tunnels":
+		if s.tunnelManager != nil {
+			s.tunnelManager.StopAll()
+		}
+		respondJSON(w, http.StatusOK, map[string]interface{}{
+			"message": "Stopped all active SSH port forwarding tunnels.",
+		})
+
+	default:
+		respondError(w, http.StatusBadRequest, "Unsupported system action")
+	}
+}
+
+func (s *Server) handleGetTunnels(w http.ResponseWriter, r *http.Request) {
+	if s.tunnelManager == nil {
+		respondJSON(w, http.StatusOK, []tunnel.TunnelView{})
+		return
+	}
+	respondJSON(w, http.StatusOK, s.tunnelManager.GetAll())
+}
+
+func (s *Server) handleCreateTunnel(w http.ResponseWriter, r *http.Request) {
+	if s.tunnelManager == nil {
+		respondError(w, http.StatusInternalServerError, "SSH tunnel manager not initialized")
+		return
+	}
+
+	var input struct {
+		tunnel.TunnelConfig
+		ConnectNow bool `json:"connect_now"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid JSON payload")
+		return
+	}
+
+	view, err := s.tunnelManager.Add(input.TunnelConfig)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	if input.ConnectNow || input.AutoConnect {
+		if startedView, startErr := s.tunnelManager.Start(view.ID, input.Secret); startErr == nil {
+			view = startedView
+		} else {
+			// Profile was saved, include connection error in view
+			view = startedView
+		}
+	}
+
+	respondJSON(w, http.StatusCreated, view)
+}
+
+func (s *Server) handleUpdateTunnel(w http.ResponseWriter, r *http.Request) {
+	if s.tunnelManager == nil {
+		respondError(w, http.StatusInternalServerError, "SSH tunnel manager not initialized")
+		return
+	}
+	id := r.PathValue("id")
+	if id == "" {
+		respondError(w, http.StatusBadRequest, "Tunnel ID is required")
+		return
+	}
+
+	var input tunnel.TunnelConfig
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid JSON payload")
+		return
+	}
+
+	view, err := s.tunnelManager.Update(id, input)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	respondJSON(w, http.StatusOK, view)
+}
+
+func (s *Server) handleDeleteTunnel(w http.ResponseWriter, r *http.Request) {
+	if s.tunnelManager == nil {
+		respondError(w, http.StatusInternalServerError, "SSH tunnel manager not initialized")
+		return
+	}
+	id := r.PathValue("id")
+	if id == "" {
+		respondError(w, http.StatusBadRequest, "Tunnel ID is required")
+		return
+	}
+
+	if err := s.tunnelManager.Delete(id); err != nil {
+		respondError(w, http.StatusNotFound, err.Error())
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]string{"message": "SSH tunnel deleted"})
+}
+
+func (s *Server) handleStartTunnel(w http.ResponseWriter, r *http.Request) {
+	if s.tunnelManager == nil {
+		respondError(w, http.StatusInternalServerError, "SSH tunnel manager not initialized")
+		return
+	}
+	id := r.PathValue("id")
+	if id == "" {
+		respondError(w, http.StatusBadRequest, "Tunnel ID is required")
+		return
+	}
+
+	var input struct {
+		Secret string `json:"secret"`
+	}
+	if r.Body != nil {
+		_ = json.NewDecoder(r.Body).Decode(&input)
+	}
+
+	view, err := s.tunnelManager.Start(id, input.Secret)
+	if err != nil {
+		status := http.StatusBadGateway
+		if errors.Is(err, tunnel.ErrSecretRequired) || errors.Is(err, tunnel.ErrPrivateKeyNotSet) {
+			status = http.StatusBadRequest
+		}
+		respondJSON(w, status, map[string]interface{}{
+			"message": err.Error(),
+			"tunnel":  view,
+		})
+		return
+	}
+
+	respondJSON(w, http.StatusOK, view)
+}
+
+func (s *Server) handleStopTunnel(w http.ResponseWriter, r *http.Request) {
+	if s.tunnelManager == nil {
+		respondError(w, http.StatusInternalServerError, "SSH tunnel manager not initialized")
+		return
+	}
+	id := r.PathValue("id")
+	if id == "" {
+		respondError(w, http.StatusBadRequest, "Tunnel ID is required")
+		return
+	}
+
+	if err := s.tunnelManager.Stop(id); err != nil {
+		respondError(w, http.StatusNotFound, err.Error())
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]string{"message": "SSH tunnel stopped"})
+}
+
+// WorkbenchURL returns the full URL to the workbench or a sub-path such as "/control".
+func (s *Server) WorkbenchURL(subPath string) string {
+	port := s.HTTPSPort()
+	if port == 443 || port == 0 {
+		return fmt.Sprintf("https://reverse.local%s", subPath)
+	}
+	return fmt.Sprintf("https://reverse.local:%d%s", port, subPath)
+}
+
 func (s *Server) handleGetLogs(w http.ResponseWriter, r *http.Request) {
 	limitStr := r.URL.Query().Get("limit")
 	limit := 100
@@ -496,8 +1127,15 @@ func (s *Server) handleStreamLogs(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// syncHosts updates the OS hosts file with all active domains.
+// syncHosts updates the OS hosts file with all active domains when auto_sync_hosts is enabled.
 func (s *Server) syncHosts() error {
+	if s.settingsStore != nil && !s.settingsStore.Get().AutoSyncHosts {
+		return nil
+	}
+	return s.forceSyncHosts()
+}
+
+func (s *Server) forceSyncHosts() error {
 	activeDomains := s.store.GetActiveDomains()
 	return s.hostsManager.Sync(activeDomains)
 }
@@ -576,26 +1214,29 @@ const badGatewayHTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>502 Bad Gateway - {{.Domain}}</title>
   <style>
-    body { background-color: #0b0f19; color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
-    .card { background: #111827; border: 1px solid #1f2937; border-radius: 16px; padding: 32px; max-width: 520px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5); }
-    .badge { display: inline-block; padding: 4px 10px; border-radius: 9999px; background: rgba(244, 63, 94, 0.1); color: #f43f5e; font-size: 12px; font-weight: 600; margin-bottom: 16px; }
-    h1 { margin: 0 0 8px 0; font-size: 22px; font-weight: 700; color: #ffffff; }
-    p { color: #94a3b8; font-size: 14px; line-height: 1.5; margin: 0 0 16px 0; }
-    .details { background: #0f172a; border-radius: 8px; padding: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: #38bdf8; word-break: break-all; margin-bottom: 20px; }
-    .btn { display: inline-block; padding: 10px 20px; border-radius: 8px; background: #10b981; color: #042f2e; text-decoration: none; font-weight: 600; font-size: 13px; }
+    body { background-color: #fafafa; color: #18181b; font-family: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100dvh; margin: 0; padding: 16px; box-sizing: border-box; }
+    .card { background: #ffffff; border: 1px solid #e4e4e7; border-top: 4px solid #dc2626; padding: 28px; max-width: 520px; width: 100%; }
+    .badge { display: inline-block; padding: 4px 8px; background: #fef2f2; border: 1px solid #dc2626; color: #b91c1c; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12px; font-weight: 600; margin-bottom: 16px; }
+    h1 { margin: 0 0 8px 0; font-size: 20px; font-weight: 700; color: #18181b; letter-spacing: -0.01em; }
+    p { color: #52525b; font-size: 14px; line-height: 1.55; margin: 0 0 16px 0; }
+    .details { background: #f4f4f5; border: 1px solid #e4e4e7; padding: 12px; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12px; color: #0369a1; word-break: break-all; margin-bottom: 20px; line-height: 1.5; }
+    .btn { display: inline-flex; align-items: center; min-height: 40px; padding: 8px 18px; background: #dc2626; color: #ffffff; text-decoration: none; font-family: "IBM Plex Mono", ui-monospace, monospace; font-weight: 700; font-size: 12px; text-transform: uppercase; box-sizing: border-box; }
+    .btn:hover { background: #b91c1c; }
+    .btn:focus-visible { outline: 2px solid #dc2626; outline-offset: 2px; }
   </style>
 </head>
 <body>
-  <div class="card">
-    <div class="badge">502 Bad Gateway</div>
+  <main class="card">
+    <div class="badge">502 BAD GATEWAY</div>
     <h1>Target Service Unreachable</h1>
-    <p>Reverse Local could not connect to the upstream backend for <strong>{{.Domain}}</strong>.</p>
+    <p>Reverse.Local could not connect to the upstream target configured for <strong>{{.Domain}}</strong>.</p>
     <div class="details">Target: {{.TargetURL}}<br>Error: {{.Error}}</div>
-    <p>Please ensure your local web server or development process is running and actively listening on that port.</p>
-    <a href="https://reverse.local" class="btn">Manage in Reverse.Local</a>
-  </div>
+    <p>Start your local development server on that port, or update the upstream target port in the workbench.</p>
+    <a href="https://reverse.local" class="btn">Open Reverse.Local Workbench</a>
+  </main>
 </body>
 </html>`
 
@@ -615,24 +1256,27 @@ const notFoundHTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{{if .Inactive}}Domain Inactive{{else}}Domain Not Found{{end}} - {{.Domain}}</title>
   <style>
-    body { background-color: #0b0f19; color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
-    .card { background: #111827; border: 1px solid #1f2937; border-radius: 16px; padding: 32px; max-width: 520px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5); }
-    .badge { display: inline-block; padding: 4px 10px; border-radius: 9999px; background: rgba(245, 158, 11, 0.1); color: #f59e0b; font-size: 12px; font-weight: 600; margin-bottom: 16px; }
-    h1 { margin: 0 0 8px 0; font-size: 22px; font-weight: 700; color: #ffffff; }
-    p { color: #94a3b8; font-size: 14px; line-height: 1.5; margin: 0 0 16px 0; }
-    .domain { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #34d399; font-weight: 600; }
-    .btn { display: inline-block; padding: 10px 20px; border-radius: 8px; background: #10b981; color: #042f2e; text-decoration: none; font-weight: 600; font-size: 13px; }
+    body { background-color: #fafafa; color: #18181b; font-family: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100dvh; margin: 0; padding: 16px; box-sizing: border-box; }
+    .card { background: #ffffff; border: 1px solid #e4e4e7; border-top: 4px solid #dc2626; padding: 28px; max-width: 520px; width: 100%; }
+    .badge { display: inline-block; padding: 4px 8px; background: #fef2f2; border: 1px solid #dc2626; color: #b91c1c; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12px; font-weight: 600; margin-bottom: 16px; }
+    h1 { margin: 0 0 8px 0; font-size: 20px; font-weight: 700; color: #18181b; letter-spacing: -0.01em; }
+    p { color: #52525b; font-size: 14px; line-height: 1.55; margin: 0 0 16px 0; }
+    .domain { font-family: "IBM Plex Mono", ui-monospace, monospace; color: #b91c1c; font-weight: 600; }
+    .btn { display: inline-flex; align-items: center; min-height: 40px; padding: 8px 18px; background: #dc2626; color: #ffffff; text-decoration: none; font-family: "IBM Plex Mono", ui-monospace, monospace; font-weight: 700; font-size: 12px; text-transform: uppercase; box-sizing: border-box; }
+    .btn:hover { background: #b91c1c; }
+    .btn:focus-visible { outline: 2px solid #dc2626; outline-offset: 2px; }
   </style>
 </head>
 <body>
-  <div class="card">
-    <div class="badge">{{if .Inactive}}Inactive Route{{else}}Unregistered Domain{{end}}</div>
-    <h1>{{if .Inactive}}Route is Inactive{{else}}Domain Not Configured{{end}}</h1>
-    <p>Traffic for <span class="domain">{{.Domain}}</span> reached this local proxy, but this domain is {{if .Inactive}}currently toggled off{{else}}not yet registered{{end}}.</p>
-    <a href="https://reverse.local" class="btn">Configure at reverse.local</a>
-  </div>
+  <main class="card">
+    <div class="badge">{{if .Inactive}}503 ROUTE PAUSED{{else}}404 UNREGISTERED DOMAIN{{end}}</div>
+    <h1>{{if .Inactive}}Route is Paused{{else}}Domain Not Registered{{end}}</h1>
+    <p>Traffic for <span class="domain">{{.Domain}}</span> reached Reverse.Local, but this domain is {{if .Inactive}}currently paused{{else}}not registered in the routing matrix{{end}}.</p>
+    <a href="https://reverse.local" class="btn">Configure Route in Workbench</a>
+  </main>
 </body>
 </html>`
 

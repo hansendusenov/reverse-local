@@ -1,43 +1,43 @@
-# Panduan Kompilasi & Build (Build Guide) — Reverse.Local
+# Compilation & Build Guide: Reverse.Local
 
-Dokumen ini berisi panduan lengkap langkah demi langkah untuk melakukan kompilasi (*compile*), *build*, dan menjalankan **Reverse.Local** pada sistem operasi Windows, macOS, dan Linux.
+Step-by-step instructions to compile, build, and run **Reverse.Local** on Windows, macOS, and Linux.
 
 ---
 
-## 1. Prasyarat Sistem (Prerequisites)
+## 1. Prerequisites
 
-Sebelum melakukan build, pastikan sistem Anda telah memiliki:
-1. **Go (Golang)**: Versi **1.22** atau yang lebih baru.
-   - Cek versi Go di terminal:
+Before building, ensure your environment has:
+1. **Go (Golang)**: Version **1.22** or newer.
+   - Verify your installed version:
      ```bash
      go version
      ```
-   - Unduh jika belum terpasang: [golang.org/dl](https://go.dev/dl/)
-2. **CGO / GCC**:
-   - **Windows**: **TIDAK MEMERLUKAN GCC / CGO**. Library system tray yang digunakan (`github.com/getlantern/systray`) pada Windows telah diimplementasikan dengan pure Go dan Windows Win32 API (`golang.org/x/sys/windows`), sehingga build 100% portabel.
-   - **Linux**: Jika ingin menjalankan GUI System Tray, butuh paket pustaka `libayatana-appindicator3-dev` atau `libappindicator3-dev`. Namun jika menggunakan mode `-headless` (sangat direkomendasikan untuk server/docker/wsl), **tidak butuh dependensi eksternal apapun**.
+   - Download from [go.dev/dl](https://go.dev/dl/) if not installed.
+2. **CGO / C Compiler**:
+   - **Windows**: **No GCC or CGO required**. The system tray library (`github.com/getlantern/systray`) uses pure Go and native Win32 API calls (`golang.org/x/sys/windows`), producing a 100% portable binary.
+   - **Linux**: Running the GUI system tray requires `libayatana-appindicator3-dev` or `libappindicator3-dev`. Running in `-headless` mode (recommended for servers, Docker, and WSL) requires zero external C libraries.
 
 ---
 
-## 2. Cara Compile & Build di Windows
+## 2. Building on Windows
 
-Terdapat dua mode build yang dapat Anda pilih sesuai kebutuhan:
+Choose between two build modes depending on your workflow:
 
-### A. Mode Production (Rekomendasi: Silent System Tray / Tanpa Jendela Hitam CMD)
-Jika Anda ingin aplikasi berjalan murni di latar belakang (*background*) hanya berupa ikon di taskbar / system tray tanpa memunculkan jendela console hitam:
+### A. Production Release Mode (Silent System Tray without Console Window)
+Compiles Reverse.Local as a background GUI utility that lives in the Windows System Tray without opening a command prompt window:
 
 ```powershell
 go build -ldflags="-H windowsgui -s -w" -o reverse-local.exe .
 ```
 
-> **Penjelasan Parameter:**
-> - `-H windowsgui`: Menginstruksikan linker Go untuk mengompilasi program sebagai aplikasi GUI Windows (bukan Console), sehingga jendela CMD tidak akan muncul saat dijalankan.
-> - `-s -w`: Menghapus tabel simbol debug (*symbol table* dan *DWARF info*), memangkas ukuran file binary hingga ~35% lebih kecil dan mempercepat waktu *startup*.
+**Linker Flags:**
+- `-H windowsgui`: Instructs the Go linker to build a Windows GUI subsystem binary instead of a console binary, suppressing the terminal window on launch.
+- `-s -w`: Strips the symbol table and DWARF debug metadata, reducing binary size by roughly 35%.
 
 ---
 
-### B. Mode Debug / Development (Dengan Jendela Console untuk Melihat Log)
-Jika Anda sedang melakukan pengujian (*debugging*) dan ingin melihat log server, status koneksi proxy, dan aktivitas HTTP/HTTPS secara *real-time*:
+### B. Debug / Console Mode (With Terminal Window for Real-Time Logs)
+Keeps the console window attached so you can inspect startup diagnostics and live `[ACCESS]` HTTP/HTTPS logs in real time:
 
 ```powershell
 go build -o reverse-local-debug.exe .
@@ -45,122 +45,111 @@ go build -o reverse-local-debug.exe .
 
 ---
 
-### C. Build Otomatis Menggunakan Script `build.bat`
-Tersedia script otomatis di dalam repositori:
-1. Buka folder proyek.
-2. Klik ganda file `build.bat`.
-3. Pilih opsi **[1] Release** atau **[2] Debug**. Binary akan langsung ter-generate otomatis.
+### C. Automated Build via `build.bat`
+You can also run the included batch script:
+1. Open the repository root folder.
+2. Run `build.bat`.
+3. Select **[1] Release**, **[2] Debug**, or **[3] Run Unit Tests then Build Release**.
 
 ---
 
-## 3. Cara Compile di macOS
+## 3. Building on macOS
 
 ```bash
-# Build binary standar
 go build -ldflags="-s -w" -o reverse-local .
-
-# Jika menggunakan Apple Silicon (M1/M2/M3/M4) atau Intel, Go otomatis mendeteksi arsitektur lokal.
 ```
+Go automatically targets your native architecture (Apple Silicon `arm64` or Intel `amd64`).
 
 ---
 
-## 4. Cara Compile di Linux
+## 4. Building on Linux
 
 ```bash
-# Build binary standar (mode headless / daemon)
 go build -ldflags="-s -w" -o reverse-local .
 ```
 
 ---
 
-## 5. Cross-Compilation (Build untuk OS Lain)
+## 5. Cross-Compilation
 
-Go memungkinkan Anda melakukan *cross-compile* dari satu OS ke OS lainnya tanpa perlu berpindah komputer:
+Build binaries for other operating systems from any machine:
 
-### Membangun file `.exe` Windows dari Linux atau macOS:
+### Build Windows `.exe` from Linux or macOS
 ```bash
 GOOS=windows GOARCH=amd64 go build -ldflags="-H windowsgui -s -w" -o reverse-local.exe .
 ```
 
-### Membangun binary Linux dari Windows (PowerShell):
+### Build Linux Binary from Windows (PowerShell)
 ```powershell
 $env:GOOS="linux"; $env:GOARCH="amd64"; go build -ldflags="-s -w" -o reverse-local .
 ```
 
-### Membangun binary macOS ARM64 (Apple Silicon) dari OS apapun:
+### Build macOS ARM64 (Apple Silicon) Binary
 ```bash
 GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o reverse-local-darwin-arm64 .
 ```
 
 ---
 
-## 6. Mengapa Reverse.Local Membutuhkan Hak Administrator / Root?
+## 6. Why Administrator / Root Privileges Are Required
 
-Saat dijalankan, aplikasi memerlukan hak akses Administrator (Windows) atau Root (`sudo` di Linux/macOS) karena 3 alasan teknis:
-1. **Mengikat Port Standar 80 (HTTP) dan 443 (HTTPS)**:
-   - Port di bawah 1024 merupakan *privileged ports* pada sistem operasi yang hanya boleh dibuka oleh proses yang memiliki hak akses administratif.
-   - Dengan port 80 & 443, Anda bisa mengakses `https://myapp.local` langsung tanpa mengetikkan nomor port seperti `:8443` di browser.
-2. **Sinkronisasi File `hosts` Sistem Operasi**:
-   - Menulis ke `C:\Windows\System32\drivers\etc\hosts` (Windows) atau `/etc/hosts` (macOS/Linux) untuk memetakan domain lokal Anda ke `127.0.0.1`.
-3. **Pemasangan Root CA Lokal ke System Trust Store**:
-   - Memasukkan sertifikat CA ke Windows Certificate Store (`certutil -addstore -f "Root"`) atau macOS System Keychain agar browser tidak memunculkan peringatan *"Your connection is not private"* (SSL Warning).
+Reverse.Local requires Administrator (Windows) or `root` (`sudo` on macOS/Linux) permissions for three operating system operations:
+1. **Binding Privileged Ports 80 (HTTP) and 443 (HTTPS)**:
+   - Ports below `1024` are restricted to elevated processes on Unix and Windows systems.
+   - Binding directly to `:80` and `:443` lets you open `https://myapp.local` in your browser without appending custom port numbers.
+2. **Synchronizing the OS `hosts` File**:
+   - Writing managed domain entries to `C:\Windows\System32\drivers\etc\hosts` (Windows) or `/etc/hosts` (macOS/Linux) requires administrative write access.
+3. **Registering the Local Root CA in the OS Trust Store**:
+   - Running `certutil -addstore -f "Root"` (Windows), `security add-trusted-cert` (macOS), or `update-ca-certificates` (Linux) so browsers trust local HTTPS domains without certificate warnings.
 
 ---
 
-## 7. Cara Menjalankan dengan Hak Akses Administrator
+## 7. Running with Elevated Privileges
 
-### A. Di Windows
+### A. Windows
 
-#### Cara 1: Melalui Klik Kanan (Paling Mudah)
-1. Buka File Explorer dan temukan `reverse-local.exe`.
-2. Klik kanan pada file tersebut.
-3. Pilih **"Run as administrator"** (Jalankan sebagai administrator).
-4. Klik **Yes** pada konfirmasi UAC Windows.
-5. Ikon Reverse.Local akan muncul di pojok kanan bawah Taskbar / System Tray Anda.
+#### Option 1: Context Menu
+1. Right-click `reverse-local.exe` in File Explorer.
+2. Select **Run as administrator** and confirm the Windows UAC prompt.
+3. The Reverse.Local icon will appear in your Windows System Tray.
 
-#### Cara 2: Melalui PowerShell Terminal
-Buka PowerShell dan jalankan perintah:
+#### Option 2: PowerShell
 ```powershell
 Start-Process .\reverse-local.exe -Verb runAs
 ```
 
-#### Cara 3: Membuat Shortcut yang Selalu Otomatis "Run as Administrator"
-Jika Anda sering menggunakannya setiap hari:
-1. Klik kanan pada `reverse-local.exe` ➔ pilih **Show more options** ➔ **Create shortcut** (Buat pintasan).
-2. Pindahkan pintasan tersebut ke Desktop Anda.
-3. Klik kanan pada shortcut tersebut ➔ pilih **Properties**.
-4. Di tab **Shortcut**, klik tombol **Advanced...** (Lanjutan).
-5. Centang kotak **"Run as administrator"** ➔ Klik **OK** ➔ Klik **Apply**.
-6. Sekarang setiap kali shortcut diklik, Windows akan otomatis menjalankannya sebagai Administrator.
+#### Option 3: Always Run Shortcut as Administrator
+1. Right-click `reverse-local.exe` and select **Create shortcut**.
+2. Right-click the new shortcut and open **Properties**.
+3. Under the **Shortcut** tab, click **Advanced...**.
+4. Check **Run as administrator**, then click **OK** and **Apply**.
 
-#### Cara 4: Menjalankan Otomatis saat Windows Menyala (Auto-start on Startup)
-1. Tekan tombol `Win + R`, ketik `shell:startup`, lalu tekan Enter.
-2. Salin (*copy-paste*) shortcut yang telah dibuat pada Cara 3 ke dalam folder Startup tersebut.
+#### Option 4: Launch Automatically at Windows Startup
+1. Press `Win + R`, type `shell:startup`, and press Enter.
+2. Copy the administrator shortcut from Option 3 into the Startup folder.
 
 ---
 
-### B. Di macOS
+### B. macOS
 
-Jalankan perintah dengan `sudo` di Terminal:
 ```bash
 sudo ./reverse-local
 ```
-*Ikon Reverse.Local akan muncul di Menu Bar bagian atas.*
+The tray icon appears in the top macOS Menu Bar.
 
 ---
 
-### C. Di Linux
+### C. Linux
 
-Jalankan mode headless di latar belakang (*background*):
+Run in background headless mode:
 ```bash
 sudo ./reverse-local -headless &
 ```
 
-#### Atau pasang sebagai Systemd Service (Opsional):
-Buat file service di `/etc/systemd/system/reverse-local.service`:
+#### Optional `systemd` Service (`/etc/systemd/system/reverse-local.service`)
 ```ini
 [Unit]
-Description=Reverse Local Reverse Proxy
+Description=Reverse.Local Reverse Proxy Daemon
 After=network.target
 
 [Service]
@@ -172,7 +161,8 @@ RestartSec=5s
 [Install]
 WantedBy=multi-user.target
 ```
-Lalu aktifkan:
+
+Enable and start the service:
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl enable --now reverse-local
@@ -180,15 +170,15 @@ sudo systemctl enable --now reverse-local
 
 ---
 
-## 8. Verifikasi & Pengujian Hasil Build
+## 8. Running the Unit Test Suite
 
-Untuk memastikan semua modul berjalan 100% sempurna sebelum digunakan:
+Verify all packages before building:
 
 ```powershell
 go test -v ./...
 ```
 
-Output yang diharapkan:
+Expected output:
 ```text
 === RUN   TestGetAppIcons
 --- PASS: TestGetAppIcons (0.00s)
@@ -203,33 +193,34 @@ Output yang diharapkan:
 === RUN   TestReverseProxyForwarding
 --- PASS: TestReverseProxyForwarding (0.17s)
 PASS
-ok      reverse-local/internal/assets   0.829s
-ok      reverse-local/internal/certs    1.606s
-ok      reverse-local/internal/config   0.922s
-ok      reverse-local/internal/hosts    0.648s
-ok      reverse-local/internal/proxy    3.275s
+ok      reverse-local/internal/assets
+ok      reverse-local/internal/certs
+ok      reverse-local/internal/config
+ok      reverse-local/internal/hosts
+ok      reverse-local/internal/logger
+ok      reverse-local/internal/proxy
 ```
 
 ---
 
-## 9. Pemecahan Masalah (Troubleshooting)
+## 9. Troubleshooting
 
-### Port 80 atau 443 sudah digunakan (*Port already in use*)
-Jika Anda menerima pesan error bahwa port 80 atau 443 telah dipakai oleh aplikasi lain (misal: IIS, Skype, Apache XAMPP, atau Nginx lokal):
-- **Cek proses yang menggunakan port di Windows**:
+### Port 80 or 443 Already in Use
+If another process (such as IIS, Apache, Nginx, or Skype) is already listening on port `:80` or `:443`:
+- **Inspect bound ports on Windows**:
   ```powershell
   netstat -ano | findstr :80
   netstat -ano | findstr :443
   ```
-- **Solusi Alternatif**: Anda dapat menjalankan Reverse.Local pada port kustom dengan flag:
+- **Use custom ports via CLI flags**:
   ```powershell
   .\reverse-local.exe -http 8080 -https 8443
   ```
-  *(Dashboard dapat diakses di `https://reverse.local:8443`)*.
+  *(Access the dashboard at `https://reverse.local:8443`)*.
 
-### Peringatan Sertifikat di Browser Mozilla Firefox
-Windows Trust Store berlaku otomatis untuk Google Chrome, Microsoft Edge, Brave, dan Safari. Firefox memiliki sertifikat internal sendiri:
-1. Buka Dashboard di `https://reverse.local`.
-2. Klik tombol **"Download Root CA"** di header atas untuk mengunduh `reverse-local-ca.crt`.
-3. Di Firefox, buka `Settings` ➔ ketik `Certificates` di kolom pencarian ➔ klik **View Certificates...** ➔ tab **Authorities** ➔ klik **Import...**.
-4. Pilih file `reverse-local-ca.crt` yang diunduh, centang *"Trust this CA to identify websites"*, lalu klik **OK**.
+### Certificate Warning in Mozilla Firefox
+Chrome, Edge, Brave, and Safari read the OS Trust Store by default. Firefox uses its own internal certificate store:
+1. Open the Reverse.Local dashboard at `https://reverse.local`.
+2. Click **Download CA (.crt)** in the top bar to save `reverse-local-ca.crt` (or enable `security.enterprise_roots.enabled` in `about:config`).
+3. In Firefox, open **Settings**, search for **Certificates**, click **View Certificates...**, open the **Authorities** tab, and click **Import...**.
+4. Select `reverse-local-ca.crt`, check **Trust this CA to identify websites**, and click **OK**.

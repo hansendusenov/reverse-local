@@ -1,0 +1,39 @@
+name: Build Windows (.msi) & macOS (.dmg) Installers
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  build-windows-msi:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.x"
+      - name: Build Windows Executable
+        run: go build -ldflags="-H windowsgui -s -w" -o reverse-local.exe .
+      - name: Package Windows .msi Installer
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File installer/windows/build-msi.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ReverseLocal-Windows-MSI
+          path: dist/ReverseLocal-1.2.0-x64.msi
+
+  build-macos-dmg:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.x"
+      - name: Package macOS .dmg Disk Image
+        run: bash installer/macos/build-dmg.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ReverseLocal-macOS-DMG
+          path: dist/ReverseLocal-1.2.0-macOS.dmg
+

@@ -1,63 +1,61 @@
 @echo off
 setlocal enabledelayedexpansion
 
-echo ========================================================================
-echo   Reverse.Local - Build Script (Windows)
-echo ========================================================================
+echo Reverse.Local Build Script (Windows)
+echo.
 
-REM Check if Go is installed
 where go >nul 2>nul
 if %ERRORLEVEL% neq 0 (
-    echo [ERROR] Go compiler tidak ditemukan! Pastikan Go 1.22+ sudah terinstall dan ada di PATH.
+    echo [ERROR] Go compiler not found. Install Go 1.22+ and ensure it is in your PATH.
     pause
     exit /b 1
 )
 
-echo Pilih mode build:
-echo [1] Release (Silent Tray / Tanpa jendela console CMD hitam) - Direkomendasikan
-echo [2] Debug / Console (Menampilkan jendela console CMD untuk melihat log)
-echo [3] Jalankan Unit Test terlebih dahulu lalu Build Release
-set /p choice="Masukkan pilihan (1/2/3) [default: 1]: "
+echo Select build target:
+echo [1] Release (Silent System Tray without console window) - Default
+echo [2] Debug / Console (With console window for real-time logs)
+echo [3] Run unit test suite first, then build Release
+set /p choice="Enter choice (1/2/3) [default: 1]: "
 
 if "%choice%"=="" set choice=1
 
 if "%choice%"=="3" (
-    echo [INFO] Menjalankan test suite...
+    echo [INFO] Running unit tests...
     go test -v ./...
     if %ERRORLEVEL% neq 0 (
-        echo [ERROR] Unit test gagal! Proses build dibatalkan.
+        echo [ERROR] Unit tests failed. Build aborted.
         pause
         exit /b 1
     )
-    echo [INFO] Semua unit test berhasil.
+    echo [INFO] All unit tests passed.
     set choice=1
 )
 
 if "%choice%"=="1" (
-    echo [INFO] Membangun binary Release (Silent GUI / Tray background)...
+    echo [INFO] Building Release binary (silent system tray)...
     go build -ldflags="-H windowsgui -s -w" -o reverse-local.exe .
     if %ERRORLEVEL% equ 0 (
-        echo [SUCCESS] Binary berhasil dibuat: reverse-local.exe
+        echo [SUCCESS] Built binary: reverse-local.exe
         echo.
-        echo Petunjuk menjalankan:
-        echo Klik kanan pada reverse-local.exe -^> "Run as Administrator"
-        echo Atau lewat PowerShell: Start-Process .\reverse-local.exe -Verb runAs
+        echo To run with Administrator privileges:
+        echo   Right-click reverse-local.exe -^> "Run as administrator"
+        echo   Or in PowerShell: Start-Process .\reverse-local.exe -Verb runAs
     ) else (
-        echo [ERROR] Build gagal!
+        echo [ERROR] Release build failed.
     )
 ) else if "%choice%"=="2" (
-    echo [INFO] Membangun binary Debug (dengan jendela console CMD)...
+    echo [INFO] Building Debug binary (with console output)...
     go build -o reverse-local-debug.exe .
     if %ERRORLEVEL% equ 0 (
-        echo [SUCCESS] Binary berhasil dibuat: reverse-local-debug.exe
+        echo [SUCCESS] Built binary: reverse-local-debug.exe
         echo.
-        echo Petunjuk menjalankan:
-        echo Jalankan lewat CMD/PowerShell sebagai Administrator untuk melihat log real-time.
+        echo To run:
+        echo   Launch from an elevated PowerShell or Command Prompt to inspect live logs.
     ) else (
-        echo [ERROR] Build gagal!
+        echo [ERROR] Debug build failed.
     )
 ) else (
-    echo [ERROR] Pilihan tidak valid.
+    echo [ERROR] Invalid selection.
 )
 
 pause

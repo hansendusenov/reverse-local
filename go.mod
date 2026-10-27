@@ -12,5 +12,6 @@ require (
 	github.com/getlantern/systray v1.2.2 // indirect
 	github.com/go-stack/stack v1.8.0 // indirect
 	github.com/oxtoacart/bpool v0.0.0-20190530202638-03653db5a59c // indirect
-	golang.org/x/sys v0.1.0 // indirect
+	golang.org/x/crypto v0.58.0 // indirect
+	golang.org/x/sys v0.49.0 // indirect
 )

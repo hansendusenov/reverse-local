@@ -297,6 +297,59 @@ func (s *Store) FilePath() string {
 	return s.filePath
 }
 
+// ReplaceAll imports and persists a batch of routes, merging by domain or ID.
+func (s *Store) ReplaceAll(incoming []Route) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	imported := 0
+	for _, item := range incoming {
+		cleanDomain, cleanURL, err := validateInputs(item.Domain, item.TargetURL)
+		if err != nil {
+			continue
+		}
+		var matchID string
+		for id, existing := range s.routes {
+			if strings.EqualFold(existing.Domain, cleanDomain) {
+				matchID = id
+				break
+			}
+		}
+		if matchID != "" {
+			existing := s.routes[matchID]
+			existing.Domain = cleanDomain
+			existing.TargetURL = cleanURL
+			existing.Active = item.Active
+			s.routes[matchID] = existing
+		} else {
+			id := strings.TrimSpace(item.ID)
+			if id == "" {
+				id = generateID()
+			}
+			if _, exists := s.routes[id]; exists {
+				id = generateID()
+			}
+			createdAt := item.CreatedAt
+			if createdAt == "" {
+				createdAt = time.Now().UTC().Format(time.RFC3339)
+			}
+			s.routes[id] = Route{
+				ID:        id,
+				Domain:    cleanDomain,
+				TargetURL: cleanURL,
+				Active:    item.Active,
+				CreatedAt: createdAt,
+			}
+		}
+		imported++
+	}
+
+	if err := s.saveLocked(); err != nil {
+		return 0, err
+	}
+	return imported, nil
+}
+
 func validateInputs(domain, targetURL string) (string, string, error) {
 	domain = strings.ToLower(strings.TrimSpace(domain))
 	targetURL = strings.TrimSpace(targetURL)

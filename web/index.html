@@ -1,535 +1,572 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Reverse.Local: Local Reverse Proxy, Hosts Manager &amp; Dynamic SSL</title>
-  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <title>Reverse.Local // Local Reverse Proxy, SSH Tunnel &amp; Dynamic TLS Workbench</title>
+  <link rel="icon" href="/favicon.ico" type="image/x-icon">
+  <link rel="apple-touch-icon" href="/icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-  <!-- Tailwind CSS CDN -->
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      darkMode: "class",
-      theme: {
-        extend: {
-          colors: {
-            surface: {
-              base: "#0b0f19",
-              panel: "#0f172a",
-              card: "#171f33",
-              cardHover: "#1e293b",
-              border: "#334155",
-              borderLight: "#475569"
-            },
-            brand: {
-              emerald: "#10b981",
-              emeraldLight: "#34d399",
-              emeraldDark: "#059669",
-              cyan: "#06b6d4",
-              cyanLight: "#22d3ee"
-            }
-          },
-          fontFamily: {
-            sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
-            mono: ['JetBrains Mono', 'ui-monospace', 'monospace']
-          }
-        }
-      }
-    }
-  </script>
   <style>
-    body {
-      background-color: #0b0f19;
-      color: #dfe2f1;
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    :root {
+      color-scheme: light;
+      scroll-padding-top: 4.5rem;
     }
-    button:focus-visible, a:focus-visible, input:focus-visible {
-      outline: 2px solid #10b981;
+    body {
+      background-color: #fafafa;
+      color: #18181b;
+      font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+    button:focus-visible,
+    a:focus-visible,
+    input:focus-visible,
+    select:focus-visible,
+    [tabindex="0"]:focus-visible {
+      outline: 2px solid #dc2626;
       outline-offset: 2px;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, ::before, ::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
     }
     ::-webkit-scrollbar {
       width: 6px;
       height: 6px;
     }
     ::-webkit-scrollbar-track {
-      background: #0b0f19;
+      background: #f4f4f5;
     }
     ::-webkit-scrollbar-thumb {
-      background: #334155;
-      border-radius: 3px;
+      background: #a1a1aa;
     }
     ::-webkit-scrollbar-thumb:hover {
-      background: #475569;
+      background: #71717a;
     }
   </style>
 </head>
-<body class="bg-[#0b0f19] text-[#dfe2f1] min-h-screen flex flex-col antialiased selection:bg-[#10b981] selection:text-slate-950">
+<body class="bg-[#fafafa] text-[#18181b] min-h-[100dvh] flex flex-col antialiased selection:bg-[#dc2626] selection:text-[#ffffff] border-t-4 border-[#dc2626]">
 
-  <!-- TOP COMMAND BAR -->
-  <header class="flex justify-between items-center w-full px-4 sm:px-6 py-3 border-b border-[#334155] bg-[#0f172a] sticky top-0 z-30">
-    <div class="flex items-center gap-5">
-      <!-- RL Monogram Badge & Title -->
-      <div class="flex items-center gap-3">
-        <div class="w-8 h-8 rounded border border-[#10b981] bg-[#171f33] flex items-center justify-center font-mono text-sm text-[#10b981] font-semibold tracking-tighter shadow-sm">
-          RL
+  <header class="w-full border-b border-[#e4e4e7] bg-[#ffffff] sticky top-0 z-30">
+    <div class="max-w-[1680px] mx-auto flex flex-wrap justify-between items-center px-4 sm:px-6 py-2.5 gap-3">
+      <div class="flex items-center gap-4 min-w-0">
+        <div class="flex items-center gap-3 min-w-0">
+          <div class="px-2.5 py-1 bg-[#dc2626] font-mono text-xs font-bold text-[#ffffff] tracking-tight shrink-0" aria-hidden="true">
+            RL//01
+          </div>
+          <div class="min-w-0">
+            <div class="flex items-center gap-2">
+              <h1 class="text-sm font-bold font-mono text-[#18181b] tracking-tight uppercase truncate">reverse.local</h1>
+              <span id="runtime-os-badge" class="px-1.5 py-0.5 text-[11px] font-mono bg-[#f4f4f5] text-[#52525b] border border-[#71717a] tabular-nums">daemon</span>
+            </div>
+            <p class="text-[11px] font-mono text-[#52525b] truncate">
+              Engineered by <strong class="text-[#18181b] font-semibold">Hansen Dusenov</strong>
+            </p>
+          </div>
         </div>
-        <div>
+
+        <div class="hidden xl:flex items-center gap-4 ml-2 pl-4 border-l border-[#e4e4e7] text-xs font-mono tabular-nums">
           <div class="flex items-center gap-2">
-            <span class="text-sm font-bold text-white tracking-tight">reverse.local</span>
-            <span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-[#1e293b] text-slate-300 border border-[#334155]">v1.0</span>
+            <span class="text-[#52525b]">PORTS:</span>
+            <span id="header-ports-label" class="text-[#b91c1c] font-semibold">HTTP :80 &rarr; HTTPS :443</span>
           </div>
-          <div class="flex items-center gap-1.5 mt-0.5">
-            <span class="w-1.5 h-1.5 rounded-full bg-[#10b981] inline-block"></span>
-            <span class="text-[11px] font-mono text-slate-400">Built by <strong class="text-[#10b981] font-medium">Hansen Dusenov</strong></span>
+          <span class="text-[#e4e4e7]" aria-hidden="true">/</span>
+          <div class="flex items-center gap-2">
+            <span class="text-[#52525b]">LAN DNS:</span>
+            <button type="button" onclick="openDocsModal(this, 'lan')" id="header-lan-label" class="text-[#047857] hover:underline font-semibold">mDNS :5353</button>
           </div>
-        </div>
-      </div>
-
-      <!-- Navigation tabs -->
-      <nav class="hidden lg:flex items-center gap-5 ml-2 border-l border-[#334155] pl-5 text-xs font-medium">
-        <button onclick="scrollToRoutes()" class="text-[#10b981] font-semibold border-b-2 border-[#10b981] pb-1">Routes</button>
-        <button onclick="scrollToLogs()" class="text-slate-400 hover:text-white transition-colors flex items-center gap-1.5">
-          <span>Access Logs</span>
-          <span id="nav-logs-badge" class="px-1.5 py-0.2 rounded-full text-[10px] bg-[#171f33] border border-[#334155] text-cyan-400 font-mono">0</span>
-        </button>
-        <button onclick="scrollToCert()" class="text-slate-400 hover:text-white transition-colors">Certificates</button>
-        <button onclick="scrollToHosts()" class="text-slate-400 hover:text-white transition-colors">Hosts Sync</button>
-      </nav>
-    </div>
-
-    <!-- Right Status Badges & Quick Action Controls -->
-    <div class="flex items-center gap-2.5">
-      <!-- Proxy Port Indicator -->
-      <div class="hidden xl:flex items-center gap-2 bg-[#0b0f19] border border-[#334155] px-2.5 py-1 rounded text-xs font-mono">
-        <span class="w-2 h-2 rounded-full bg-[#10b981]"></span>
-        <span class="text-slate-400">Proxy:</span>
-        <span class="text-[#10b981]">HTTP 80 &rarr; HTTPS 443</span>
-      </div>
-
-      <!-- Root CA Trust Status -->
-      <div id="ca-status-badge" class="hidden sm:flex items-center gap-1.5 bg-[#0b0f19] border border-[#334155] px-2.5 py-1 rounded text-xs font-mono">
-        <svg class="w-3.5 h-3.5 text-[#06b6d4]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
-        </svg>
-        <span class="text-slate-400">Root CA:</span>
-        <span id="ca-status-text" class="text-[#06b6d4] font-medium">Active (Trusted)</span>
-        <button id="btn-install-ca" onclick="installRootCA()" class="hidden ml-1 px-1.5 py-0.5 text-[10px] bg-[#10b981] hover:bg-[#059669] text-slate-950 font-semibold rounded transition">
-          Install CA
-        </button>
-      </div>
-
-      <!-- Download CA Certificate Button -->
-      <a href="/ca.crt" download="reverse-local-ca.crt" title="Download Root CA Certificate (.crt) to manually trust" class="hidden md:flex items-center gap-1.5 px-3 py-1.5 bg-[#171f33] border border-[#334155] hover:border-[#475569] text-slate-200 hover:text-[#10b981] transition text-xs font-mono rounded">
-        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
-        </svg>
-        <span>Download CA</span>
-      </a>
-
-      <!-- Add New Route Primary CTA -->
-      <button onclick="openAddModal()" class="flex items-center gap-1.5 px-3.5 py-1.5 bg-[#10b981] hover:bg-[#059669] text-slate-950 font-semibold text-xs rounded transition active:scale-[0.99]">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"></path>
-        </svg>
-        <span>New Route</span>
-      </button>
-    </div>
-  </header>
-
-  <!-- MAIN VIEWPORT CONTAINER -->
-  <main class="flex-1 w-full max-w-[1520px] mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
-
-    <!-- METRICS ARCHITECTURAL GRID -->
-    <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-      <!-- Metric 1: Active Routes -->
-      <div class="bg-[#0f172a] border border-[#334155] rounded-lg p-4 flex flex-col justify-between hover:border-[#475569] transition-colors">
-        <div class="flex justify-between items-start">
-          <span class="text-[10px] font-mono font-semibold text-slate-400 uppercase tracking-wider">ACTIVE ROUTES</span>
-          <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-[#171f33] text-[#10b981] border border-[#334155] flex items-center gap-1">
-            <span class="w-1.5 h-1.5 rounded-full bg-[#10b981]"></span>
-            <span id="metric-uptime">100% online</span>
-          </span>
-        </div>
-        <div class="mt-4">
-          <div class="text-2xl font-bold font-mono text-white tracking-tight">
-            <span id="stat-active-count">0</span>
-            <span class="text-sm font-sans font-normal text-slate-400">/ <span id="stat-total-count">0 registered</span></span>
-          </div>
-          <div class="mt-3 flex items-center justify-between border-t border-[#334155] pt-2 text-xs font-mono text-slate-400">
-            <span>Ports bound</span>
-            <span id="metric-ports" class="text-[#10b981] font-semibold truncate max-w-[180px]">80, 443</span>
+          <span class="text-[#e4e4e7]" aria-hidden="true">/</span>
+          <div class="flex items-center gap-2">
+            <span class="text-[#52525b]">HOSTS:</span>
+            <code id="hosts-path-label" class="text-[#18181b] font-medium"># BEGIN LOCAL-REVERSE-PROXY</code>
           </div>
         </div>
       </div>
 
-      <!-- Metric 2: SSL/TLS Authority -->
-      <div id="section-cert" class="bg-[#0f172a] border border-[#334155] rounded-lg p-4 flex flex-col justify-between hover:border-[#475569] transition-colors">
-        <div class="flex justify-between items-start">
-          <span class="text-[10px] font-mono font-semibold text-slate-400 uppercase tracking-wider">SSL/TLS AUTHORITY</span>
-          <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-[#171f33] text-[#06b6d4] border border-[#334155]">
-            SNI ENGINE
-          </span>
-        </div>
-        <div class="mt-4">
-          <div class="text-sm font-semibold text-white">Dynamic SNI on-the-fly</div>
-          <div class="mt-3 flex items-center justify-between border-t border-[#334155] pt-2 text-xs font-mono text-slate-400">
-            <span>Cipher specs</span>
-            <span class="text-[#06b6d4]">RSA 2048 / TLS 1.3</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Metric 3: OS Hosts Sync -->
-      <div id="section-hosts" class="bg-[#0f172a] border border-[#334155] rounded-lg p-4 flex flex-col justify-between hover:border-[#475569] transition-colors">
-        <div class="flex justify-between items-start">
-          <span class="text-[10px] font-mono font-semibold text-slate-400 uppercase tracking-wider">OS HOSTS SYNC</span>
-          <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-[#171f33] text-[#10b981] border border-[#334155]">
-            LOCK CLEAN
-          </span>
-        </div>
-        <div class="mt-4">
-          <div class="text-sm font-semibold text-white">Auto Synchronized</div>
-          <div class="mt-3 flex items-center justify-between border-t border-[#334155] pt-2 text-xs font-mono text-slate-400">
-            <span>Target table</span>
-            <span class="text-slate-300">hosts (0 conflicts)</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Metric 4: Live Traffic Count -->
-      <div class="bg-[#0f172a] border border-[#334155] rounded-lg p-4 flex flex-col justify-between hover:border-[#475569] transition-colors">
-        <div class="flex justify-between items-start">
-          <span class="text-[10px] font-mono font-semibold text-slate-400 uppercase tracking-wider">TRAFFIC TELEMETRY</span>
-          <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-[#171f33] text-[#06b6d4] border border-[#334155]">
-            LIVE LOGGER
-          </span>
-        </div>
-        <div class="mt-4">
-          <div class="text-2xl font-bold font-mono text-white tracking-tight">
-            <span id="metric-total-requests">0</span>
-            <span class="text-sm font-sans font-normal text-slate-400">requests recorded</span>
-          </div>
-          <div class="mt-3 flex items-center justify-between border-t border-[#334155] pt-2 text-xs font-mono text-slate-400">
-            <span>Stream status</span>
-            <span id="sse-status" class="text-[#10b981] flex items-center gap-1">
-              <span class="w-1.5 h-1.5 rounded-full bg-[#10b981]"></span>
-              Live (SSE)
-            </span>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ROUTES MANAGEMENT DATA TABLE SECTION -->
-    <section id="section-routes" class="bg-[#0f172a] border border-[#334155] rounded-lg overflow-hidden shadow-sm">
-      
-      <!-- Table Controls Toolbar -->
-      <div class="p-4 border-b border-[#334155] flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 bg-[#0f172a]">
-        <!-- Segmented Filter Tabs -->
-        <div class="flex items-center gap-1 bg-[#0b0f19] p-1 rounded border border-[#334155] self-start">
-          <button onclick="setFilter('all')" id="tab-all" class="px-3 py-1 bg-[#1e293b] text-[#10b981] font-mono text-xs font-semibold rounded">
-            All (<span id="filter-all-count">0</span>)
-          </button>
-          <button onclick="setFilter('active')" id="tab-active" class="px-3 py-1 text-slate-400 hover:text-white font-mono text-xs rounded transition-colors">
-            Active (<span id="filter-active-count">0</span>)
-          </button>
-          <button onclick="setFilter('inactive')" id="tab-inactive" class="px-3 py-1 text-slate-400 hover:text-white font-mono text-xs rounded transition-colors">
-            Inactive (<span id="filter-inactive-count">0</span>)
+      <div class="flex items-center gap-2 shrink-0">
+        <div id="section-cert" class="hidden sm:flex items-center gap-2 bg-[#f4f4f5] border border-[#e4e4e7] px-2.5 py-1 text-xs font-mono">
+          <span id="ca-status-dot" class="w-2 h-2 rounded-full bg-[#0369a1]" aria-hidden="true"></span>
+          <span class="text-[#52525b]">ROOT CA:</span>
+          <span id="ca-status-text" class="text-[#047857] font-semibold">Checking...</span>
+          <button type="button" id="btn-install-ca" onclick="installRootCA()" class="hidden ml-1 min-h-[28px] px-2 py-0.5 text-[11px] bg-[#dc2626] hover:bg-[#b91c1c] text-[#ffffff] font-semibold transition">
+            Trust CA
           </button>
         </div>
 
-        <!-- Search & Quick Sync Controls -->
-        <div class="flex items-center gap-2 flex-1 sm:max-w-md justify-end">
-          <div class="relative w-full">
-            <svg class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-            </svg>
-            <input type="text" id="search-input" oninput="renderRoutes()" placeholder="Filter by domain or target port..." class="w-full bg-[#0b0f19] border border-[#334155] pl-9 pr-3 py-1.5 text-xs font-mono text-slate-100 placeholder-slate-500 rounded focus:border-[#10b981] focus:outline-none transition">
-          </div>
-
-          <!-- Refresh Button -->
-          <button onclick="fetchRoutes()" title="Refresh and sync routes" class="p-2 border border-[#334155] bg-[#0b0f19] hover:border-[#475569] text-slate-400 hover:text-white rounded transition">
-            <svg id="refresh-spinner" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-            </svg>
-          </button>
-        </div>
-      </div>
-
-      <!-- Core Data Table -->
-      <div class="overflow-x-auto">
-        <table class="w-full text-left border-collapse">
-          <thead>
-            <tr class="border-b border-[#334155] bg-[#0b0f19] text-[10px] font-mono font-semibold text-slate-400 uppercase tracking-wider">
-              <th class="py-3 px-4 w-20">STATUS</th>
-              <th class="py-3 px-4">DOMAIN (HTTPS)</th>
-              <th class="py-3 px-4">LOCAL TARGET</th>
-              <th class="py-3 px-4">SSL CERTIFICATE</th>
-              <th class="py-3 px-4 hidden md:table-cell">CREATED</th>
-              <th class="py-3 px-4 text-right w-24">ACTIONS</th>
-            </tr>
-          </thead>
-          <tbody id="routes-table-body" class="divide-y divide-[#334155] font-mono text-xs">
-            <!-- Dynamic rows rendered via JavaScript -->
-          </tbody>
-        </table>
-      </div>
-
-      <!-- Empty State -->
-      <div id="empty-state" class="hidden py-14 px-6 text-center space-y-3">
-        <div class="w-12 h-12 rounded bg-[#0b0f19] border border-[#334155] text-slate-500 flex items-center justify-center mx-auto">
-          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+        <a href="/ca.crt" download="reverse-local-ca.crt" class="min-h-[40px] sm:min-h-[34px] px-3 py-1.5 bg-[#ffffff] border border-[#71717a] hover:border-[#18181b] text-[#18181b] transition text-xs font-mono inline-flex items-center gap-1.5">
+          <svg class="w-3.5 h-3.5 shrink-0 text-[#dc2626]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
           </svg>
-        </div>
-        <div>
-          <h3 class="text-sm font-semibold text-white">No Routes Registered</h3>
-          <p class="text-xs text-slate-400 mt-1 max-w-sm mx-auto">Add a local domain route to bind local ports to secure HTTPS domains and sync your OS hosts file automatically.</p>
-        </div>
-        <button onclick="openAddModal()" class="px-3.5 py-1.5 rounded bg-[#10b981] hover:bg-[#059669] text-slate-950 font-semibold text-xs transition inline-flex items-center space-x-1.5">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <span class="hidden md:inline">Download CA (.crt)</span>
+          <span class="md:hidden">CA.crt</span>
+        </a>
+
+        <button type="button" onclick="openDocsModal(this)" class="min-h-[40px] sm:min-h-[34px] px-3 py-1.5 bg-[#ffffff] border border-[#71717a] hover:border-[#dc2626] hover:text-[#b91c1c] text-[#18181b] font-mono font-semibold text-xs transition inline-flex items-center gap-1.5">
+          <svg class="w-3.5 h-3.5 shrink-0 text-[#dc2626]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+          </svg>
+          <span>Docs &amp; Guide</span>
+        </button>
+
+        <button type="button" onclick="openDesktopControlPanel(this)" class="min-h-[40px] sm:min-h-[34px] px-3 py-1.5 bg-[#ffffff] border border-[#71717a] hover:border-[#dc2626] hover:text-[#b91c1c] text-[#18181b] font-mono font-semibold text-xs transition inline-flex items-center gap-1.5">
+          <svg class="w-3.5 h-3.5 shrink-0 text-[#dc2626]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+          </svg>
+          <span>Control Panel</span>
+        </button>
+
+        <button type="button" id="btn-header-add-route" onclick="openAddModal(this)" class="min-h-[40px] sm:min-h-[34px] px-3.5 py-1.5 bg-[#dc2626] hover:bg-[#b91c1c] text-[#ffffff] font-mono font-bold text-xs uppercase transition inline-flex items-center gap-1.5">
+          <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"></path>
           </svg>
-          <span>Add New Route</span>
+          <span>Modal Editor</span>
+        </button>
+      </div>
+    </div>
+
+    <nav aria-label="Workbench section navigation" class="lg:hidden border-t border-[#e4e4e7] bg-[#f4f4f5] px-4 py-1 flex items-center gap-2 overflow-x-auto text-xs font-mono">
+      <a href="#section-routes" class="min-h-[44px] px-3 inline-flex items-center text-[#b91c1c] font-bold border-b-2 border-[#dc2626] whitespace-nowrap">
+        [01] Routing Matrix
+      </a>
+      <a href="#section-tunnels" class="min-h-[44px] px-3 inline-flex items-center text-[#52525b] hover:text-[#18181b] whitespace-nowrap">
+        [01B] SSH Tunnels
+      </a>
+      <a href="#section-logs" class="min-h-[44px] px-3 inline-flex items-center gap-1.5 text-[#52525b] hover:text-[#18181b] whitespace-nowrap">
+        <span>[02] Traffic Stream</span>
+        <span id="mobile-nav-logs-badge" class="px-1.5 py-0.5 text-[11px] bg-[#ffffff] border border-[#71717a] text-[#b91c1c] font-semibold tabular-nums">0</span>
+      </a>
+      <button type="button" onclick="openDocsModal(this)" class="min-h-[44px] px-3 inline-flex items-center text-[#b91c1c] font-semibold whitespace-nowrap">
+        [03] Docs &amp; Guide
+      </button>
+    </nav>
+  </header>
+
+  <section id="section-runtime" aria-label="Hardware runtime telemetry strip" class="w-full border-b border-[#e4e4e7] bg-[#ffffff]">
+    <div class="max-w-[1680px] mx-auto grid grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-[#e4e4e7] font-mono text-xs tabular-nums">
+      <div class="px-4 sm:px-6 py-3 flex items-center justify-between gap-2">
+        <div>
+          <span class="text-[11px] text-[#52525b] uppercase font-semibold block">Active Routes</span>
+          <div class="mt-0.5 flex items-baseline gap-1.5">
+            <strong id="stat-active-count" class="text-lg font-bold text-[#b91c1c]">0</strong>
+            <span class="text-[#52525b]">/ <span id="stat-total-count" class="text-[#18181b] font-semibold">0</span> total</span>
+          </div>
+        </div>
+        <span id="metric-ports" class="px-2 py-0.5 bg-[#f4f4f5] border border-[#e4e4e7] text-[#52525b] text-[11px] truncate max-w-[130px]">80, 443</span>
+      </div>
+
+      <div class="px-4 sm:px-6 py-3 flex items-center justify-between gap-2">
+        <div>
+          <span class="text-[11px] text-[#52525b] uppercase font-semibold block">TLS SNI Engine</span>
+          <span class="mt-0.5 text-sm font-bold text-[#18181b] block">RSA-2048 &middot; TLS 1.3</span>
+        </div>
+        <span id="ca-status-pill" class="px-2 py-0.5 bg-[#ecfdf5] border border-[#047857] text-[#047857] font-semibold text-[11px]">Local CA</span>
+      </div>
+
+      <div class="px-4 sm:px-6 py-3 flex items-center justify-between gap-2">
+        <div>
+          <span class="text-[11px] text-[#52525b] uppercase font-semibold block">Traffic Ring Buffer</span>
+          <div class="mt-0.5 flex items-baseline gap-1.5">
+            <strong id="metric-total-requests" class="text-lg font-bold text-[#18181b]">0</strong>
+            <span class="text-[#52525b]">/ 1,000 cap</span>
+          </div>
+        </div>
+        <span id="sse-status" class="px-2 py-0.5 bg-[#ecfdf5] border border-[#047857] text-[#047857] font-semibold text-[11px] inline-flex items-center gap-1.5">
+          <span class="w-1.5 h-1.5 rounded-full bg-[#047857]" aria-hidden="true"></span>
+          <span>SSE Live</span>
+        </span>
+      </div>
+
+      <div class="px-4 sm:px-6 py-3 flex items-center justify-between gap-2">
+        <div>
+          <span class="text-[11px] text-[#52525b] uppercase font-semibold block">Mean Upstream Latency</span>
+          <strong id="stat-avg-lat" class="mt-0.5 text-lg font-bold text-[#0369a1] block">0 ms</strong>
+        </div>
+        <div class="text-right text-[11px] text-[#52525b]">
+          <div>2xx: <strong id="stat-2xx" class="text-[#047857]">0</strong></div>
+          <div>Err: <strong id="stat-err" class="text-[#b91c1c]">0</strong></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <main class="flex-1 w-full max-w-[1680px] mx-auto grid grid-cols-1 lg:grid-cols-12 lg:divide-x divide-[#e4e4e7]">
+
+    <section id="section-routes" aria-labelledby="heading-routes" class="lg:col-span-5 flex flex-col bg-[#ffffff] border-b lg:border-b-0 border-[#e4e4e7]">
+      <div class="px-4 sm:px-5 py-3 border-b border-[#e4e4e7] bg-[#f4f4f5] flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2.5">
+          <span class="font-mono text-xs font-bold text-[#dc2626]">[01]</span>
+          <h2 id="heading-routes" class="text-xs font-bold font-mono text-[#18181b] uppercase tracking-wider">Domain Routing Matrix</h2>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <a href="/api/backup" download="reverse-local-backup.json" title="Export all saved domains, SSH tunnels, and settings to a JSON file" class="min-h-[38px] sm:min-h-[30px] px-2.5 py-1 bg-[#ffffff] border border-[#71717a] hover:border-[#dc2626] text-[#18181b] hover:text-[#b91c1c] text-xs font-mono inline-flex items-center gap-1 transition">
+            <span>Export</span>
+          </a>
+          <button type="button" onclick="document.getElementById('wb-backup-input').click()" title="Import domains, SSH tunnels, and settings from a backup JSON file" class="min-h-[38px] sm:min-h-[30px] px-2.5 py-1 bg-[#ffffff] border border-[#71717a] hover:border-[#047857] text-[#18181b] hover:text-[#047857] text-xs font-mono inline-flex items-center gap-1 transition">
+            <span>Import</span>
+          </button>
+          <input id="wb-backup-input" type="file" accept=".json,application/json" class="hidden" onchange="handleWorkbenchBackupRestore(event)">
+          <button type="button" onclick="fetchRoutes()" aria-label="Reload routes and synchronize OS hosts file" title="Reload routes and synchronize OS hosts file" class="min-h-[38px] sm:min-h-[30px] px-2.5 py-1 bg-[#ffffff] border border-[#71717a] hover:border-[#18181b] text-[#18181b] text-xs font-mono inline-flex items-center gap-1.5 transition">
+            <svg id="refresh-spinner" class="w-3.5 h-3.5 text-[#dc2626]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+            </svg>
+            <span>Sync Hosts</span>
+          </button>
+        </div>
+      </div>
+
+      <form id="quick-route-form" onsubmit="handleQuickAddSubmit(event)" class="p-4 sm:p-5 border-b border-[#e4e4e7] bg-[#fafafa] space-y-3" novalidate>
+        <div class="flex items-center justify-between">
+          <span class="text-[11px] font-mono font-bold text-[#b91c1c] uppercase tracking-wider">Quick-Bind New Domain Route</span>
+          <span class="text-[11px] font-mono text-[#52525b]">Auto-syncs OS hosts + SNI TLS</span>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
+          <div class="sm:col-span-5">
+            <label for="quick-domain" class="block text-[11px] font-mono font-semibold text-[#52525b] mb-1">Local Domain (HTTPS)</label>
+            <div class="flex items-stretch bg-[#ffffff] border border-[#71717a] focus-within:border-[#dc2626]">
+              <span class="flex items-center px-2 text-[11px] font-mono text-[#52525b] bg-[#f4f4f5] border-r border-[#e4e4e7] select-none">https://</span>
+              <input id="quick-domain" type="text" inputmode="url" autocomplete="off" spellcheck="false" required placeholder="api.local" aria-describedby="quick-form-error" class="w-full min-h-[44px] sm:min-h-[36px] bg-transparent px-2.5 py-1.5 text-base sm:text-xs font-mono text-[#18181b] placeholder-[#52525b]/70 focus:outline-none">
+            </div>
+          </div>
+
+          <div class="sm:col-span-5">
+            <label for="quick-target" class="block text-[11px] font-mono font-semibold text-[#52525b] mb-1">Upstream Target URL</label>
+            <input id="quick-target" type="url" inputmode="url" autocomplete="off" spellcheck="false" required placeholder="http://127.0.0.1:3000" aria-describedby="quick-form-error" class="w-full min-h-[44px] sm:min-h-[36px] bg-[#ffffff] border border-[#71717a] focus:border-[#dc2626] px-2.5 py-1.5 text-base sm:text-xs font-mono text-[#18181b] placeholder-[#52525b]/70 focus:outline-none">
+          </div>
+
+          <div class="sm:col-span-2 flex items-end">
+            <button type="submit" id="btn-quick-bind" class="w-full min-h-[44px] sm:min-h-[36px] px-3 py-1.5 bg-[#dc2626] hover:bg-[#b91c1c] text-[#ffffff] font-mono font-bold text-xs uppercase tracking-tight transition active:scale-[0.99]">
+              Bind
+            </button>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap items-center justify-between gap-2 pt-0.5 text-[11px] font-mono">
+          <div class="flex flex-wrap items-center gap-1">
+            <span class="text-[#52525b] mr-1">TLD:</span>
+            <button type="button" onclick="appendQuickSuffix('.local')" class="min-h-[32px] sm:min-h-[24px] px-2 py-0.5 bg-[#ffffff] border border-[#71717a] hover:border-[#dc2626] hover:text-[#b91c1c] text-[#18181b] transition">.local</button>
+            <button type="button" onclick="appendQuickSuffix('.test')" class="min-h-[32px] sm:min-h-[24px] px-2 py-0.5 bg-[#ffffff] border border-[#71717a] hover:border-[#dc2626] hover:text-[#b91c1c] text-[#18181b] transition">.test</button>
+            <button type="button" onclick="appendQuickSuffix('.dev')" class="min-h-[32px] sm:min-h-[24px] px-2 py-0.5 bg-[#ffffff] border border-[#71717a] hover:border-[#dc2626] hover:text-[#b91c1c] text-[#18181b] transition">.dev</button>
+          </div>
+          <div class="flex flex-wrap items-center gap-1 tabular-nums">
+            <span class="text-[#52525b] mr-1">Port:</span>
+            <button type="button" onclick="setQuickTarget('http://127.0.0.1:3000')" class="min-h-[32px] sm:min-h-[24px] px-2 py-0.5 bg-[#ffffff] border border-[#71717a] hover:border-[#dc2626] hover:text-[#b91c1c] text-[#18181b] transition">:3000</button>
+            <button type="button" onclick="setQuickTarget('http://127.0.0.1:5173')" class="min-h-[32px] sm:min-h-[24px] px-2 py-0.5 bg-[#ffffff] border border-[#71717a] hover:border-[#dc2626] hover:text-[#b91c1c] text-[#18181b] transition">:5173</button>
+            <button type="button" onclick="setQuickTarget('http://127.0.0.1:8080')" class="min-h-[32px] sm:min-h-[24px] px-2 py-0.5 bg-[#ffffff] border border-[#71717a] hover:border-[#dc2626] hover:text-[#b91c1c] text-[#18181b] transition">:8080</button>
+            <button type="button" onclick="setQuickTarget('http://127.0.0.1:8000')" class="min-h-[32px] sm:min-h-[24px] px-2 py-0.5 bg-[#ffffff] border border-[#71717a] hover:border-[#dc2626] hover:text-[#b91c1c] text-[#18181b] transition">:8000</button>
+          </div>
+        </div>
+
+        <div id="quick-form-error" role="alert" class="hidden px-3 py-2 bg-[#fef2f2] border border-[#dc2626] text-[#b91c1c] text-xs font-mono font-medium"></div>
+      </form>
+
+      <div class="p-3 sm:px-5 border-b border-[#e4e4e7] bg-[#ffffff] flex flex-wrap items-center justify-between gap-2">
+        <div role="group" aria-label="Filter routes by state" class="flex items-center gap-1 bg-[#f4f4f5] p-1 border border-[#71717a] tabular-nums">
+          <button type="button" onclick="setFilter('all')" id="tab-all" class="min-h-[36px] sm:min-h-[26px] px-2.5 py-0.5 bg-[#dc2626] text-[#ffffff] font-mono text-xs font-bold">
+            All (<span id="filter-all-count">0</span>)
+          </button>
+          <button type="button" onclick="setFilter('active')" id="tab-active" class="min-h-[36px] sm:min-h-[26px] px-2.5 py-0.5 text-[#52525b] hover:text-[#18181b] font-mono text-xs transition-colors">
+            Active (<span id="filter-active-count">0</span>)
+          </button>
+          <button type="button" onclick="setFilter('inactive')" id="tab-inactive" class="min-h-[36px] sm:min-h-[26px] px-2.5 py-0.5 text-[#52525b] hover:text-[#18181b] font-mono text-xs transition-colors">
+            Paused (<span id="filter-inactive-count">0</span>)
+          </button>
+        </div>
+
+        <div class="relative flex-1 min-w-[180px]">
+          <label for="search-input" class="sr-only">Filter configured routes by domain or port</label>
+          <input type="search" id="search-input" oninput="renderRoutes()" autocomplete="off" placeholder="Filter domain or target..." class="w-full min-h-[40px] sm:min-h-[32px] bg-[#ffffff] border border-[#71717a] focus:border-[#dc2626] px-3 py-1 text-base sm:text-xs font-mono text-[#18181b] placeholder-[#52525b] focus:outline-none">
+        </div>
+      </div>
+
+      <div id="routes-loading-state" aria-busy="true" class="py-12 px-6 text-center space-y-2">
+        <div class="inline-block w-5 h-5 border-2 border-[#dc2626] border-t-transparent rounded-full animate-spin" aria-hidden="true"></div>
+        <p class="text-xs font-mono text-[#52525b]">Reading route table from local daemon...</p>
+      </div>
+
+      <div id="routes-error-state" role="alert" class="hidden py-12 px-6 text-center space-y-3">
+        <p id="routes-error-message" class="text-xs font-mono text-[#b91c1c] font-medium">Could not load routes from the local daemon.</p>
+        <button type="button" onclick="fetchRoutes()" class="min-h-[44px] sm:min-h-[34px] px-4 py-1.5 bg-[#ffffff] border border-[#71717a] hover:border-[#18181b] text-[#18181b] text-xs font-mono font-semibold transition">
+          Retry Loading Routes
         </button>
       </div>
 
-      <!-- Pagination / Footer Metadata Bar -->
-      <div class="px-4 py-3 bg-[#0b0f19] border-t border-[#334155] flex flex-col sm:flex-row justify-between items-center gap-2 text-xs font-mono text-slate-400">
-        <div>Showing <span id="table-showing-count">0</span> routing entries</div>
-        <div class="flex items-center gap-4">
-          <span class="flex items-center gap-1.5">
-            <span class="w-1.5 h-1.5 rounded-full bg-[#10b981]"></span>
-            Hosts auto-sync enabled
-          </span>
-          <span class="text-[#334155]">|</span>
-          <span>DNS Resolver: 127.0.0.1</span>
-        </div>
-      </div>
-    </section>
-
-    <!-- LIVE HTTP & REVERSE PROXY ACCESS LOGS (NEW FEATURE) -->
-    <section id="section-logs" class="bg-[#0f172a] border border-[#334155] rounded-lg overflow-hidden shadow-sm">
-      
-      <!-- Logs Toolbar -->
-      <div class="p-4 border-b border-[#334155] flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3 bg-[#0f172a]">
-        <div>
-          <div class="flex items-center gap-2.5">
-            <h2 class="text-sm font-bold font-mono text-white tracking-tight uppercase">REVERSE PROXY ACCESS &amp; TRAFFIC LOGS</h2>
-            <span class="relative flex h-2 w-2">
-              <span id="log-pulse" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#10b981] opacity-75"></span>
-              <span class="relative inline-flex rounded-full h-2 w-2 bg-[#10b981]"></span>
-            </span>
-          </div>
-          <p class="text-xs text-slate-400 mt-0.5">Live inspection of incoming HTTP requests, target backends, status codes, and latency.</p>
-        </div>
-
-        <!-- Filter & Action Controls -->
-        <div class="flex flex-wrap items-center gap-2 w-full lg:w-auto justify-start lg:justify-end">
-          <!-- Status Filter Pills -->
-          <div class="flex items-center gap-1 bg-[#0b0f19] p-1 rounded border border-[#334155] text-xs font-mono">
-            <button onclick="setLogStatusFilter('all')" id="log-filter-all" class="px-2 py-0.5 rounded bg-[#1e293b] text-[#10b981] font-semibold">All</button>
-            <button onclick="setLogStatusFilter('2xx')" id="log-filter-2xx" class="px-2 py-0.5 rounded text-slate-400 hover:text-white transition">2xx</button>
-            <button onclick="setLogStatusFilter('3xx')" id="log-filter-3xx" class="px-2 py-0.5 rounded text-slate-400 hover:text-white transition">3xx</button>
-            <button onclick="setLogStatusFilter('4xx')" id="log-filter-4xx" class="px-2 py-0.5 rounded text-slate-400 hover:text-white transition">4xx</button>
-            <button onclick="setLogStatusFilter('5xx')" id="log-filter-5xx" class="px-2 py-0.5 rounded text-slate-400 hover:text-white transition">5xx</button>
-          </div>
-
-          <!-- Log Search Input -->
-          <div class="relative">
-            <input type="text" id="log-search-input" oninput="renderLogs()" placeholder="Search domain, path, method..." class="w-44 sm:w-52 bg-[#0b0f19] border border-[#334155] px-3 py-1 text-xs font-mono text-white placeholder-slate-500 rounded focus:border-[#10b981] focus:outline-none transition">
-          </div>
-
-          <!-- Pause / Resume Stream Button -->
-          <button id="btn-toggle-stream" onclick="toggleStream()" title="Pause or resume live logging stream" class="px-2.5 py-1 bg-[#0b0f19] border border-[#334155] hover:border-[#475569] text-slate-300 text-xs font-mono rounded flex items-center gap-1.5 transition">
-            <span id="stream-btn-icon" class="w-2 h-2 rounded-full bg-[#10b981]"></span>
-            <span id="stream-btn-text">Pause</span>
-          </button>
-
-          <!-- Export Logs Button -->
-          <button onclick="exportLogsJSON()" title="Export access logs to JSON file" class="px-2.5 py-1 bg-[#0b0f19] border border-[#334155] hover:border-[#475569] text-slate-300 hover:text-white text-xs font-mono rounded flex items-center gap-1.5 transition">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-            <span>Export</span>
-          </button>
-
-          <!-- Clear Logs Button -->
-          <button onclick="clearLogs()" title="Clear all logs history" class="px-2.5 py-1 bg-[#0b0f19] border border-[#334155] hover:border-rose-500/40 text-slate-300 hover:text-rose-400 text-xs font-mono rounded flex items-center gap-1.5 transition">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-            </svg>
-            <span>Clear</span>
-          </button>
-        </div>
-      </div>
-
-      <!-- Logs Live Telemetry Summary Strip -->
-      <div class="px-4 py-2 bg-[#0b0f19] border-b border-[#334155] flex flex-wrap items-center justify-between text-xs font-mono text-slate-400 gap-2">
-        <div class="flex items-center gap-3 overflow-x-auto">
-          <span>Captured: <b id="stat-total" class="text-white">0</b></span>
-          <span class="text-slate-600">&bull;</span>
-          <span>Success: <b id="stat-2xx" class="text-emerald-400">0</b> (2xx)</span>
-          <span class="text-slate-600">&bull;</span>
-          <span>Redirects: <b id="stat-3xx" class="text-blue-400">0</b> (3xx)</span>
-          <span class="text-slate-600">&bull;</span>
-          <span>Errors: <b id="stat-err" class="text-rose-400">0</b> (4xx/5xx)</span>
-          <span class="text-slate-600">&bull;</span>
-          <span>Avg Latency: <b id="stat-avg-lat" class="text-cyan-400">0 ms</b></span>
-        </div>
-        <div class="text-[11px] text-slate-500 hidden sm:block">
-          Click any row to inspect complete request &amp; backend target
-        </div>
-      </div>
-
-      <!-- Logs Table -->
-      <div class="overflow-x-auto max-h-[460px] overflow-y-auto">
+      <div id="routes-table-wrapper" class="hidden overflow-x-auto">
         <table class="w-full text-left border-collapse">
-          <thead class="sticky top-0 z-10 bg-[#0b0f19]">
-            <tr class="border-b border-[#334155] text-[10px] font-mono font-semibold text-slate-400 uppercase tracking-wider">
-              <th class="py-2.5 px-4 w-24">TIME</th>
-              <th class="py-2.5 px-4 w-20">METHOD</th>
-              <th class="py-2.5 px-4 w-20">STATUS</th>
-              <th class="py-2.5 px-4">DOMAIN &amp; PATH</th>
-              <th class="py-2.5 px-4">FORWARDED TARGET</th>
-              <th class="py-2.5 px-4 w-24">LATENCY</th>
-              <th class="py-2.5 px-4 w-28 hidden lg:table-cell">CLIENT IP</th>
-              <th class="py-2.5 px-4 w-20 text-right">ACTION</th>
+          <thead>
+            <tr class="border-b border-[#e4e4e7] bg-[#f4f4f5] text-[11px] font-mono font-bold text-[#52525b] uppercase tracking-wider">
+              <th scope="col" class="py-2.5 px-4 w-20">State</th>
+              <th scope="col" class="py-2.5 px-4">Domain &rarr; Target Pipeline</th>
+              <th scope="col" class="py-2.5 px-4 text-right w-28">Controls</th>
             </tr>
           </thead>
-          <tbody id="logs-table-body" class="divide-y divide-[#334155] font-mono text-xs">
-            <!-- Dynamically populated via SSE / Fetch -->
+          <tbody id="routes-table-body" class="divide-y divide-[#e4e4e7] font-mono text-xs tabular-nums">
           </tbody>
         </table>
       </div>
 
-      <!-- Logs Empty State -->
-      <div id="logs-empty-state" class="py-12 px-6 text-center space-y-2">
-        <div class="w-10 h-10 rounded bg-[#0b0f19] border border-[#334155] text-slate-500 flex items-center justify-center mx-auto">
-          <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
-          </svg>
+      <div id="empty-state" class="hidden py-12 px-6 text-center space-y-3">
+        <div class="w-10 h-10 bg-[#fef2f2] border border-[#dc2626] text-[#b91c1c] flex items-center justify-center mx-auto font-mono text-sm font-bold" aria-hidden="true">
+          00
         </div>
-        <div class="text-xs font-semibold text-white">No HTTP Traffic Recorded Yet</div>
-        <p class="text-[11px] text-slate-400 max-w-md mx-auto">
-          Send a request to any configured domain (e.g. <code class="text-cyan-400">curl https://api.local</code> or open in your browser) to watch real-time proxy traffic appear here.
+        <div>
+          <h3 class="text-sm font-bold font-mono text-[#18181b]">No Domain Routes Configured</h3>
+          <p class="text-xs text-[#52525b] mt-1 max-w-sm mx-auto">Use the Quick-Bind composer above to map a domain like <code class="text-[#b91c1c] font-semibold">https://app.local</code> to a localhost port.</p>
+        </div>
+        <button type="button" onclick="document.getElementById('quick-domain').focus()" class="min-h-[44px] sm:min-h-[34px] px-4 py-1.5 bg-[#dc2626] hover:bg-[#b91c1c] text-[#ffffff] font-mono font-bold text-xs uppercase transition">
+          Focus Quick-Bind Input
+        </button>
+      </div>
+
+      <div id="routes-filtered-empty-state" class="hidden py-12 px-6 text-center space-y-3">
+        <h3 class="text-sm font-bold font-mono text-[#18181b]">No Matching Routes</h3>
+        <p class="text-xs text-[#52525b] max-w-sm mx-auto">No configured routes match your active filter or search term.</p>
+        <button type="button" onclick="resetRouteFilters()" class="min-h-[44px] sm:min-h-[34px] px-3.5 py-1.5 bg-[#ffffff] border border-[#71717a] hover:border-[#18181b] text-[#18181b] text-xs font-mono transition">
+          Reset Route Filters
+        </button>
+      </div>
+
+      <div class="px-4 sm:px-5 py-2.5 bg-[#f4f4f5] border-t border-[#e4e4e7] flex justify-between items-center text-[11px] font-mono text-[#52525b] tabular-nums">
+        <span>Showing <strong id="table-showing-count" class="text-[#18181b]">0</strong> routes</span>
+        <span>DNS Loopback: 127.0.0.1</span>
+      </div>
+
+      <div id="section-tunnels" aria-labelledby="heading-tunnels" class="border-t border-[#e4e4e7] flex flex-col bg-[#ffffff]">
+        <div class="px-4 sm:px-5 py-3 border-b border-[#e4e4e7] bg-[#f4f4f5] flex items-center justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <span class="font-mono text-xs font-bold text-[#dc2626]">[01B]</span>
+            <h2 id="heading-tunnels" class="text-xs font-bold font-mono text-[#18181b] uppercase tracking-wider">SSH Port Forwarding (-L -N)</h2>
+            <span id="tunnels-count-badge" class="px-1.5 py-0.5 text-[11px] font-mono bg-[#ffffff] border border-[#71717a] text-[#b91c1c] font-semibold tabular-nums">0 / 0</span>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <button type="button" onclick="fetchTunnels()" class="min-h-[34px] sm:min-h-[28px] px-2 py-0.5 bg-[#ffffff] border border-[#71717a] hover:border-[#18181b] text-[#18181b] text-[11px] font-mono transition">
+              Refresh
+            </button>
+            <button type="button" onclick="openAddTunnelModal(this)" class="min-h-[34px] sm:min-h-[28px] px-2.5 py-0.5 bg-[#dc2626] hover:bg-[#b91c1c] text-[#ffffff] font-mono font-bold text-[11px] uppercase transition">
+              + SSH Tunnel
+            </button>
+          </div>
+        </div>
+
+        <div id="tunnels-loading-state" aria-busy="true" class="py-8 px-6 text-center space-y-2">
+          <div class="inline-block w-4 h-4 border-2 border-[#dc2626] border-t-transparent rounded-full animate-spin" aria-hidden="true"></div>
+          <p class="text-xs font-mono text-[#52525b]">Loading native Go SSH tunnel profiles...</p>
+        </div>
+
+        <div id="tunnels-error-state" role="alert" class="hidden py-8 px-6 text-center space-y-2">
+          <p id="tunnels-error-message" class="text-xs font-mono text-[#b91c1c]">Could not load SSH tunnels.</p>
+          <button type="button" onclick="fetchTunnels()" class="min-h-[34px] px-3 py-1 bg-[#ffffff] border border-[#71717a] text-xs font-mono text-[#18181b]">Retry</button>
+        </div>
+
+        <div id="tunnels-empty-state" class="hidden py-8 px-6 text-center space-y-2.5">
+          <div class="w-8 h-8 bg-[#fef2f2] border border-[#dc2626] text-[#b91c1c] flex items-center justify-center mx-auto font-mono text-xs font-bold" aria-hidden="true">
+            -L
+          </div>
+          <div>
+            <h3 class="text-xs font-bold font-mono text-[#18181b] uppercase">No SSH Port Forwards Configured</h3>
+            <p class="text-xs text-[#52525b] mt-1 max-w-sm mx-auto">Create a native Go <code class="text-[#b91c1c] font-semibold">-L -N</code> tunnel to forward remote bastion ports to <code class="text-[#047857] font-semibold">127.0.0.1</code> and bind them to HTTPS domains.</p>
+          </div>
+          <button type="button" onclick="openAddTunnelModal(this)" class="min-h-[36px] px-3.5 py-1.5 bg-[#dc2626] hover:bg-[#b91c1c] text-[#ffffff] font-mono font-bold text-xs uppercase transition">
+            Create SSH Tunnel
+          </button>
+        </div>
+
+        <div id="tunnels-list-wrapper" class="hidden divide-y divide-[#e4e4e7] font-mono text-xs">
+        </div>
+      </div>
+    </section>
+
+    <section id="section-logs" aria-labelledby="heading-logs" class="lg:col-span-7 flex flex-col bg-[#ffffff]">
+      <div class="px-4 sm:px-5 py-3 border-b border-[#e4e4e7] bg-[#f4f4f5] flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-2.5">
+          <span class="font-mono text-xs font-bold text-[#dc2626]">[02]</span>
+          <h2 id="heading-logs" class="text-xs font-bold font-mono text-[#18181b] uppercase tracking-wider">Live Reverse Proxy Traffic Stream</h2>
+          <span id="log-stream-indicator" class="w-2 h-2 rounded-full bg-[#047857]" aria-hidden="true"></span>
+          <span id="nav-logs-badge" class="px-1.5 py-0.5 text-[11px] font-mono bg-[#ffffff] border border-[#71717a] text-[#b91c1c] font-semibold tabular-nums">0</span>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-1.5">
+          <button type="button" id="btn-toggle-stream" onclick="toggleStream()" class="min-h-[38px] sm:min-h-[30px] px-2.5 py-1 bg-[#ffffff] border border-[#71717a] hover:border-[#18181b] text-[#18181b] text-xs font-mono inline-flex items-center gap-1.5 transition">
+            <span id="stream-btn-icon" class="w-2 h-2 rounded-full bg-[#047857]" aria-hidden="true"></span>
+            <span id="stream-btn-text">Pause Stream</span>
+          </button>
+
+          <button type="button" onclick="exportLogsJSON()" class="min-h-[38px] sm:min-h-[30px] px-2.5 py-1 bg-[#ffffff] border border-[#71717a] hover:border-[#18181b] text-[#18181b] text-xs font-mono inline-flex items-center gap-1.5 transition">
+            <span>Export JSON</span>
+          </button>
+
+          <button type="button" onclick="clearLogs()" class="min-h-[38px] sm:min-h-[30px] px-2.5 py-1 bg-[#ffffff] border border-[#71717a] hover:border-[#dc2626] text-[#18181b] hover:text-[#b91c1c] text-xs font-mono inline-flex items-center gap-1.5 transition">
+            <span>Clear Logs</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="p-3 sm:px-5 border-b border-[#e4e4e7] bg-[#fafafa] flex flex-wrap items-center justify-between gap-2">
+        <div role="group" aria-label="Filter access logs by HTTP status class" class="flex items-center gap-1 bg-[#f4f4f5] p-1 border border-[#71717a] text-xs font-mono tabular-nums">
+          <button type="button" onclick="setLogStatusFilter('all')" id="log-filter-all" class="min-h-[36px] sm:min-h-[26px] px-2.5 py-0.5 bg-[#dc2626] text-[#ffffff] font-bold">All</button>
+          <button type="button" onclick="setLogStatusFilter('2xx')" id="log-filter-2xx" class="min-h-[36px] sm:min-h-[26px] px-2.5 py-0.5 text-[#52525b] hover:text-[#18181b] transition">2xx</button>
+          <button type="button" onclick="setLogStatusFilter('3xx')" id="log-filter-3xx" class="min-h-[36px] sm:min-h-[26px] px-2.5 py-0.5 text-[#52525b] hover:text-[#18181b] transition">3xx</button>
+          <button type="button" onclick="setLogStatusFilter('4xx')" id="log-filter-4xx" class="min-h-[36px] sm:min-h-[26px] px-2.5 py-0.5 text-[#52525b] hover:text-[#18181b] transition">4xx</button>
+          <button type="button" onclick="setLogStatusFilter('5xx')" id="log-filter-5xx" class="min-h-[36px] sm:min-h-[26px] px-2.5 py-0.5 text-[#52525b] hover:text-[#18181b] transition">5xx</button>
+        </div>
+
+        <div class="relative flex-1 min-w-[200px]">
+          <label for="log-search-input" class="sr-only">Search access logs by host, path, or method</label>
+          <input type="search" id="log-search-input" oninput="renderLogs()" autocomplete="off" placeholder="Search host, path, method, status..." class="w-full min-h-[40px] sm:min-h-[32px] bg-[#ffffff] border border-[#71717a] focus:border-[#dc2626] px-3 py-1 text-base sm:text-xs font-mono text-[#18181b] placeholder-[#52525b] focus:outline-none">
+        </div>
+      </div>
+
+      <div class="px-4 sm:px-5 py-2 bg-[#ffffff] border-b border-[#e4e4e7] flex flex-wrap items-center justify-between text-[11px] font-mono text-[#52525b] gap-2 tabular-nums">
+        <div class="flex items-center gap-3">
+          <span>Captured: <strong id="stat-total" class="text-[#18181b]">0</strong></span>
+          <span>&bull;</span>
+          <span>3xx: <strong id="stat-3xx" class="text-[#0369a1]">0</strong></span>
+        </div>
+        <span>Select any row or press Enter to open Request Telemetry Inspector</span>
+      </div>
+
+      <div id="logs-loading-state" aria-busy="true" class="py-16 px-6 text-center space-y-2">
+        <div class="inline-block w-5 h-5 border-2 border-[#dc2626] border-t-transparent rounded-full animate-spin" aria-hidden="true"></div>
+        <p class="text-xs font-mono text-[#52525b]">Connecting to live traffic buffer...</p>
+      </div>
+
+      <div id="logs-error-state" role="alert" class="hidden py-16 px-6 text-center space-y-3">
+        <p id="logs-error-message" class="text-xs font-mono text-[#b91c1c] font-medium">Could not load access logs from the local daemon.</p>
+        <button type="button" onclick="fetchLogs()" class="min-h-[44px] sm:min-h-[34px] px-4 py-1.5 bg-[#ffffff] border border-[#71717a] hover:border-[#18181b] text-[#18181b] text-xs font-mono font-semibold transition">
+          Retry Loading Logs
+        </button>
+      </div>
+
+      <div id="logs-table-wrapper" class="hidden flex-1 overflow-x-auto max-h-[640px] overflow-y-auto">
+        <table class="w-full text-left border-collapse">
+          <thead class="sticky top-0 z-10 bg-[#f4f4f5]">
+            <tr class="border-b border-[#e4e4e7] text-[11px] font-mono font-bold text-[#52525b] uppercase tracking-wider">
+              <th scope="col" class="py-2.5 px-3.5 w-20">Time</th>
+              <th scope="col" class="py-2.5 px-3.5 w-16">Method</th>
+              <th scope="col" class="py-2.5 px-3.5 w-16">Code</th>
+              <th scope="col" class="py-2.5 px-3.5">Request &amp; Upstream Target</th>
+              <th scope="col" class="py-2.5 px-3.5 w-20 text-right">Latency</th>
+              <th scope="col" class="py-2.5 px-3.5 w-20 text-right">Detail</th>
+            </tr>
+          </thead>
+          <tbody id="logs-table-body" class="divide-y divide-[#e4e4e7] font-mono text-xs tabular-nums">
+          </tbody>
+        </table>
+      </div>
+
+      <div id="logs-empty-state" class="hidden py-16 px-6 text-center space-y-2">
+        <div class="w-10 h-10 bg-[#fef2f2] border border-[#dc2626] text-[#b91c1c] flex items-center justify-center mx-auto font-mono text-xs font-bold" aria-hidden="true">
+          RX
+        </div>
+        <h3 class="text-xs font-bold font-mono text-[#18181b] uppercase">Awaiting Incoming Proxy Traffic</h3>
+        <p class="text-xs text-[#52525b] max-w-md mx-auto">
+          Send an HTTP or WebSocket request to any active domain (for example <code class="text-[#0369a1] font-semibold">curl -k https://api.local</code>) to inspect live packets here.
         </p>
       </div>
 
-      <!-- Logs Footer -->
-      <div class="px-4 py-2.5 bg-[#0b0f19] border-t border-[#334155] flex justify-between items-center text-xs font-mono text-slate-400">
-        <div>Showing <span id="logs-showing-count">0</span> access entries (capped at 1000 in memory)</div>
-        <div class="flex items-center gap-2">
-          <span class="w-2 h-2 rounded-full bg-[#10b981]"></span>
-          <span>Buffering active</span>
-        </div>
+      <div id="logs-filtered-empty-state" class="hidden py-16 px-6 text-center space-y-3">
+        <h3 class="text-xs font-bold font-mono text-[#18181b] uppercase">No Matching Log Entries</h3>
+        <p class="text-xs text-[#52525b] max-w-sm mx-auto">No recorded requests match your selected status class or search query.</p>
+        <button type="button" onclick="resetLogFilters()" class="min-h-[44px] sm:min-h-[34px] px-3.5 py-1.5 bg-[#ffffff] border border-[#71717a] hover:border-[#18181b] text-[#18181b] text-xs font-mono transition">
+          Reset Log Filters
+        </button>
+      </div>
+
+      <div class="mt-auto px-4 sm:px-5 py-2.5 bg-[#f4f4f5] border-t border-[#e4e4e7] flex justify-between items-center text-[11px] font-mono text-[#52525b] tabular-nums">
+        <span>Showing <strong id="logs-showing-count" class="text-[#18181b]">0</strong> entries</span>
+        <span id="logs-footer-stream-state" class="text-[#047857] font-semibold">SSE stream connected</span>
       </div>
     </section>
   </main>
 
-  <!-- TECHNICAL FOOTER WITH HANSEN DUSENOV ATTRIBUTION -->
-  <footer class="w-full py-4 px-6 sm:px-8 flex flex-col md:flex-row justify-between items-center border-t border-[#334155] bg-[#0b0f19] text-xs font-mono text-slate-400 mt-auto gap-3">
-    <div class="flex flex-col sm:flex-row items-center gap-2 sm:gap-6">
-      <span class="text-[#10b981] font-semibold">Reverse.Local &bull; Engineered by Hansen Dusenov</span>
-      <span class="text-slate-400">Copyright &copy; 2026 Hansen Dusenov. All rights reserved.</span>
+  <footer class="w-full py-3.5 px-4 sm:px-6 flex flex-col md:flex-row justify-between items-center border-t border-[#e4e4e7] bg-[#ffffff] text-xs font-mono text-[#52525b] mt-auto gap-2">
+    <div class="flex flex-col sm:flex-row items-center gap-2 sm:gap-5">
+      <span class="text-[#b91c1c] font-bold">REVERSE.LOCAL // Engineered by Hansen Dusenov</span>
+      <span>Copyright &copy; 2026 Hansen Dusenov. All rights reserved.</span>
     </div>
-    <div class="flex items-center gap-3 text-slate-400">
-      <span class="flex items-center gap-1.5">
-        <span class="w-1.5 h-1.5 rounded-full bg-[#10b981]"></span>
-        Local Daemon Active
-      </span>
-      <span>&bull;</span>
-      <span>reverse.local</span>
+    <div class="flex items-center gap-3">
+      <span>SNI TLS Proxy, SSH Tunnel &amp; Hosts Manager</span>
+      <span aria-hidden="true">//</span>
+      <span class="text-[#18181b] font-semibold">https://reverse.local</span>
     </div>
   </footer>
 
-  <!-- MODAL DIALOG: CONFIGURE REVERSE PROXY ROUTE -->
-  <div id="modal" onclick="if (event.target === this) closeModal()" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-[2px] hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title">
-    <div class="bg-[#0f172a] border border-[#334155] w-full max-w-lg rounded-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-      
-      <!-- Modal Header -->
-      <div class="p-5 border-b border-[#334155] flex justify-between items-start bg-[#171f33]">
+  <div id="modal" onclick="if (event.target === this) closeModal()" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-[2px] hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="bg-[#ffffff] border border-[#71717a] border-t-4 border-t-[#dc2626] w-full max-w-lg shadow-2xl overflow-hidden">
+      <div class="p-4 sm:p-5 border-b border-[#e4e4e7] flex justify-between items-start bg-[#f4f4f5]">
         <div>
-          <h2 id="modal-title" class="text-sm font-semibold text-white tracking-tight">Configure Reverse Proxy Route</h2>
-          <p class="text-xs text-slate-400 mt-0.5">Bind local development port to secure custom local domain</p>
+          <h2 id="modal-title" class="text-sm font-bold font-mono text-[#18181b] uppercase tracking-tight">Edit Domain Route</h2>
+          <p class="text-xs text-[#52525b] mt-0.5">Configure local HTTPS domain mapping and upstream target port.</p>
         </div>
-        <button onclick="closeModal()" class="text-slate-400 hover:text-white p-1 rounded transition-colors" aria-label="Close dialog">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <button type="button" onclick="closeModal()" class="min-h-[40px] min-w-[40px] sm:min-h-[32px] sm:min-w-[32px] inline-flex items-center justify-center text-[#52525b] hover:text-[#18181b] p-1 transition-colors" aria-label="Close route editor dialog">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
           </svg>
         </button>
       </div>
 
-      <!-- Modal Form Controls -->
-      <form id="route-form" onsubmit="handleFormSubmit(event)" class="p-6 space-y-4">
+      <form id="route-form" onsubmit="handleFormSubmit(event)" class="p-5 sm:p-6 space-y-4" novalidate>
         <input type="hidden" id="form-id">
 
-        <!-- Domain Input -->
         <div>
-          <label for="form-domain" class="block text-[10px] font-mono font-semibold text-slate-400 uppercase mb-1.5">DOMAIN NAME</label>
-          <div class="flex items-stretch rounded border border-[#334155] bg-[#0b0f19] focus-within:border-[#10b981]">
-            <span class="flex items-center px-3 text-xs font-mono text-slate-500 border-r border-[#334155] select-none">https://</span>
-            <input id="form-domain" type="text" required placeholder="myapp.local" oninput="updatePreview()" class="flex-1 bg-transparent border-0 px-3 py-2 text-xs font-mono text-white placeholder-slate-500 focus:outline-none">
+          <label for="form-domain" class="block text-xs font-mono font-bold text-[#18181b] uppercase mb-1.5">Domain Name</label>
+          <div class="flex items-stretch border border-[#71717a] bg-[#ffffff] focus-within:border-[#dc2626]">
+            <span class="flex items-center px-3 text-xs font-mono text-[#52525b] bg-[#f4f4f5] border-r border-[#e4e4e7] select-none">https://</span>
+            <input id="form-domain" type="text" inputmode="url" autocomplete="off" spellcheck="false" required placeholder="myapp.local" aria-describedby="form-error" oninput="updatePreview()" class="flex-1 min-h-[44px] sm:min-h-[38px] bg-transparent border-0 px-3 py-2 text-base sm:text-xs font-mono text-[#18181b] placeholder-[#52525b]/70 focus:outline-none">
           </div>
-          <!-- Presets -->
-          <div class="flex items-center gap-1.5 mt-2 text-xs font-mono">
-            <span class="text-slate-400">Presets:</span>
-            <button type="button" onclick="appendSuffix('.local')" class="px-2 py-0.5 rounded text-xs bg-[#171f33] border border-[#334155] hover:border-slate-400 text-slate-200 transition">.local</button>
-            <button type="button" onclick="appendSuffix('.test')" class="px-2 py-0.5 rounded text-xs bg-[#171f33] border border-[#334155] hover:border-slate-400 text-slate-200 transition">.test</button>
-            <button type="button" onclick="appendSuffix('.dev')" class="px-2 py-0.5 rounded text-xs bg-[#171f33] border border-[#334155] hover:border-slate-400 text-slate-200 transition">.dev</button>
+          <div class="flex flex-wrap items-center gap-1.5 mt-2 text-xs font-mono">
+            <span class="text-[#52525b]">TLD suffixes:</span>
+            <button type="button" onclick="appendSuffix('.local')" class="min-h-[36px] sm:min-h-[26px] px-2.5 py-0.5 bg-[#f4f4f5] border border-[#71717a] hover:border-[#dc2626] hover:text-[#b91c1c] text-[#18181b] transition">.local</button>
+            <button type="button" onclick="appendSuffix('.test')" class="min-h-[36px] sm:min-h-[26px] px-2.5 py-0.5 bg-[#f4f4f5] border border-[#71717a] hover:border-[#dc2626] hover:text-[#b91c1c] text-[#18181b] transition">.test</button>
+            <button type="button" onclick="appendSuffix('.dev')" class="min-h-[36px] sm:min-h-[26px] px-2.5 py-0.5 bg-[#f4f4f5] border border-[#71717a] hover:border-[#dc2626] hover:text-[#b91c1c] text-[#18181b] transition">.dev</button>
           </div>
         </div>
 
-        <!-- Target URL Input -->
         <div>
-          <label for="form-target" class="block text-[10px] font-mono font-semibold text-slate-400 uppercase mb-1.5">TARGET PORT / ADDRESS</label>
-          <div class="relative">
-            <input id="form-target" type="text" required placeholder="http://127.0.0.1:3000" oninput="updatePreview()" class="w-full bg-[#0b0f19] border border-[#334155] px-3 py-2 text-xs font-mono text-white placeholder-slate-500 rounded focus:border-[#10b981] focus:outline-none transition">
-          </div>
-          <!-- Quick presets -->
-          <div class="flex items-center gap-1.5 mt-2 text-xs font-mono">
-            <span class="text-slate-400">Common:</span>
-            <button type="button" onclick="setTargetPreset('http://127.0.0.1:3000')" class="px-2 py-0.5 rounded text-xs bg-[#171f33] border border-[#334155] hover:border-slate-400 text-slate-200 transition">:3000</button>
-            <button type="button" onclick="setTargetPreset('http://127.0.0.1:5173')" class="px-2 py-0.5 rounded text-xs bg-[#171f33] border border-[#334155] hover:border-slate-400 text-slate-200 transition">:5173 (Vite)</button>
-            <button type="button" onclick="setTargetPreset('http://127.0.0.1:8080')" class="px-2 py-0.5 rounded text-xs bg-[#171f33] border border-[#334155] hover:border-slate-400 text-slate-200 transition">:8080</button>
-            <button type="button" onclick="setTargetPreset('http://127.0.0.1:8000')" class="px-2 py-0.5 rounded text-xs bg-[#171f33] border border-[#334155] hover:border-slate-400 text-slate-200 transition">:8000</button>
+          <label for="form-target" class="block text-xs font-mono font-bold text-[#18181b] uppercase mb-1.5">Upstream Target URL</label>
+          <input id="form-target" type="url" inputmode="url" autocomplete="off" spellcheck="false" required placeholder="http://127.0.0.1:3000" aria-describedby="form-error" oninput="updatePreview()" class="w-full min-h-[44px] sm:min-h-[38px] bg-[#ffffff] border border-[#71717a] px-3 py-2 text-base sm:text-xs font-mono text-[#18181b] placeholder-[#52525b]/70 focus:border-[#dc2626] focus:outline-none">
+          <div class="flex flex-wrap items-center gap-1.5 mt-2 text-xs font-mono tabular-nums">
+            <span class="text-[#52525b]">Common ports:</span>
+            <button type="button" onclick="setTargetPreset('http://127.0.0.1:3000')" class="min-h-[36px] sm:min-h-[26px] px-2.5 py-0.5 bg-[#f4f4f5] border border-[#71717a] hover:border-[#dc2626] hover:text-[#b91c1c] text-[#18181b] transition">:3000</button>
+            <button type="button" onclick="setTargetPreset('http://127.0.0.1:5173')" class="min-h-[36px] sm:min-h-[26px] px-2.5 py-0.5 bg-[#f4f4f5] border border-[#71717a] hover:border-[#dc2626] hover:text-[#b91c1c] text-[#18181b] transition">:5173 (Vite)</button>
+            <button type="button" onclick="setTargetPreset('http://127.0.0.1:8080')" class="min-h-[36px] sm:min-h-[26px] px-2.5 py-0.5 bg-[#f4f4f5] border border-[#71717a] hover:border-[#dc2626] hover:text-[#b91c1c] text-[#18181b] transition">:8080</button>
+            <button type="button" onclick="setTargetPreset('http://127.0.0.1:8000')" class="min-h-[36px] sm:min-h-[26px] px-2.5 py-0.5 bg-[#f4f4f5] border border-[#71717a] hover:border-[#dc2626] hover:text-[#b91c1c] text-[#18181b] transition">:8000</button>
           </div>
         </div>
 
-        <!-- Toggles & Options -->
-        <div class="space-y-3 pt-2 border-t border-[#334155]">
-          <div class="flex items-center justify-between">
+        <div class="pt-2 border-t border-[#e4e4e7]">
+          <div class="flex items-center justify-between gap-3">
             <div>
-              <span class="text-xs font-medium text-white block">Enable route immediately</span>
-              <span class="text-[11px] text-slate-400 block">Activate in proxy engine upon saving</span>
+              <label for="form-active" class="text-xs font-semibold text-[#18181b] block cursor-pointer">Enable route immediately</label>
+              <span class="text-[11px] text-[#52525b] block">Sync domain to OS hosts file and forward traffic on save</span>
             </div>
-            <label class="relative inline-flex items-center cursor-pointer">
-              <input type="checkbox" id="form-active" checked class="sr-only peer">
-              <div class="w-8 h-4 bg-[#1e293b] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-[#10b981]"></div>
-            </label>
+            <input type="checkbox" id="form-active" checked class="w-4 h-4 accent-[#dc2626] cursor-pointer">
           </div>
         </div>
 
-        <!-- Live Route Preview Box -->
-        <div class="p-3 bg-[#0b0f19] border border-[#334155] rounded">
-          <span class="text-[10px] font-mono font-semibold text-slate-400 uppercase block mb-1">ROUTE PREVIEW</span>
-          <div class="flex items-center gap-2 font-mono text-xs overflow-hidden">
-            <span class="text-[#06b6d4] font-semibold truncate" id="preview-domain">https://myapp.local</span>
-            <span class="text-slate-500">&rarr;</span>
-            <span class="text-[#10b981] font-semibold truncate" id="preview-target">http://127.0.0.1:3000</span>
+        <div class="p-3 bg-[#f4f4f5] border border-[#e4e4e7]">
+          <span class="text-[11px] font-mono font-bold text-[#52525b] uppercase block mb-1">Routing Pipeline Preview</span>
+          <div class="flex items-center gap-2 font-mono text-xs overflow-hidden tabular-nums">
+            <span class="text-[#b91c1c] font-bold truncate" id="preview-domain">https://myapp.local</span>
+            <span class="text-[#52525b]" aria-hidden="true">&rarr;</span>
+            <span class="text-[#0369a1] font-semibold truncate" id="preview-target">http://127.0.0.1:3000</span>
           </div>
         </div>
 
-        <!-- Error Feedback -->
-        <div id="form-error" class="hidden px-3 py-2 rounded bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-mono"></div>
+        <div id="form-error" role="alert" class="hidden px-3 py-2 bg-[#fef2f2] border border-[#dc2626] text-[#b91c1c] text-xs font-mono"></div>
 
-        <!-- Modal Actions -->
-        <div class="p-4 border-t border-[#334155] flex justify-end items-center gap-2.5 pt-3">
-          <button type="button" onclick="closeModal()" class="px-4 py-2 border border-[#334155] text-slate-200 hover:bg-[#171f33] rounded text-xs font-medium transition">
+        <div class="pt-3 border-t border-[#e4e4e7] flex justify-end items-center gap-2.5">
+          <button type="button" onclick="closeModal()" class="min-h-[44px] sm:min-h-[36px] px-4 py-2 bg-[#ffffff] border border-[#71717a] text-[#18181b] hover:bg-[#f4f4f5] text-xs font-mono transition">
             Cancel
           </button>
-          <button type="submit" id="btn-save-route" class="px-5 py-2 bg-[#10b981] text-slate-950 font-semibold rounded hover:bg-[#059669] transition active:scale-[0.99] text-xs">
+          <button type="submit" id="btn-save-route" class="min-h-[44px] sm:min-h-[36px] px-5 py-2 bg-[#dc2626] hover:bg-[#b91c1c] text-[#ffffff] font-mono font-bold uppercase text-xs transition">
             Save Route
           </button>
         </div>
@@ -537,190 +574,527 @@
     </div>
   </div>
 
-  <!-- DELETE CONFIRMATION MODAL -->
-  <div id="delete-modal" onclick="if (event.target === this) closeDeleteModal()" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-[2px] hidden" role="dialog" aria-modal="true">
-    <div class="bg-[#0f172a] border border-[#334155] w-full max-w-sm rounded-lg shadow-2xl p-5 space-y-4">
-      <div class="flex items-center space-x-3 text-rose-400">
-        <div class="w-9 h-9 rounded bg-rose-500/10 border border-rose-500/20 flex items-center justify-center">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-          </svg>
+  <div id="delete-modal" onclick="if (event.target === this) closeDeleteModal()" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-[2px] hidden" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title">
+    <div class="bg-[#ffffff] border border-[#71717a] border-t-4 border-t-[#dc2626] w-full max-w-sm shadow-2xl p-5 space-y-4">
+      <div class="flex items-center gap-3 text-[#b91c1c]">
+        <div class="w-9 h-9 bg-[#fef2f2] border border-[#dc2626] flex items-center justify-center shrink-0 font-mono text-xs font-bold" aria-hidden="true">
+          DEL
         </div>
-        <h3 class="text-sm font-bold text-white">Delete Route</h3>
+        <h2 id="delete-modal-title" class="text-sm font-bold font-mono text-[#18181b] uppercase">Delete Domain Route</h2>
       </div>
-      <p class="text-xs text-slate-300">
-        Are you sure you want to delete <span id="delete-domain-name" class="font-mono text-[#10b981] font-semibold"></span>?
-        The domain will be removed from your OS hosts file and reverse proxy routing table.
+      <p class="text-xs text-[#18181b] leading-relaxed">
+        Remove <span id="delete-domain-name" class="font-mono text-[#b91c1c] font-bold"></span>?
+        This removes the domain from your OS hosts file and stops forwarding traffic to its upstream target.
       </p>
-      <div class="flex items-center justify-end space-x-2.5 pt-2">
-        <button onclick="closeDeleteModal()" class="px-3.5 py-1.5 rounded border border-[#334155] text-slate-300 hover:bg-[#171f33] text-xs font-medium transition">
+      <div class="flex items-center justify-end gap-2.5 pt-2">
+        <button type="button" onclick="closeDeleteModal()" class="min-h-[44px] sm:min-h-[36px] px-3.5 py-1.5 bg-[#ffffff] border border-[#71717a] text-[#18181b] hover:bg-[#f4f4f5] text-xs font-mono transition">
           Cancel
         </button>
-        <button id="btn-confirm-delete" onclick="executeDelete()" class="px-3.5 py-1.5 rounded bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs transition">
-          Delete
+        <button type="button" id="btn-confirm-delete" onclick="executeDelete()" class="min-h-[44px] sm:min-h-[36px] px-4 py-1.5 bg-[#dc2626] hover:bg-[#b91c1c] text-[#ffffff] font-mono font-bold uppercase text-xs transition">
+          Delete Route
         </button>
       </div>
     </div>
   </div>
 
-  <!-- MODAL DIALOG: LOG ENTRY INSPECTION -->
-  <div id="log-detail-modal" onclick="if (event.target === this) closeLogDetailModal()" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-[2px] hidden" role="dialog" aria-modal="true" aria-labelledby="detail-title">
-    <div class="bg-[#0f172a] border border-[#334155] w-full max-w-2xl rounded-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 flex flex-col max-h-[90vh]">
-      
-      <!-- Modal Header -->
-      <div class="p-5 border-b border-[#334155] flex justify-between items-start bg-[#171f33]">
+  <div id="log-detail-modal" onclick="if (event.target === this) closeLogDetailModal()" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-[2px] hidden" role="dialog" aria-modal="true" aria-labelledby="detail-title">
+    <div class="bg-[#ffffff] border border-[#71717a] border-t-4 border-t-[#dc2626] w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90dvh]">
+      <div class="p-4 sm:p-5 border-b border-[#e4e4e7] flex justify-between items-start bg-[#f4f4f5]">
         <div class="flex items-center gap-3">
-          <span id="detail-method-pill" class="px-2.5 py-1 rounded text-xs font-mono font-bold bg-[#0b0f19] border border-[#334155] text-cyan-400">GET</span>
+          <span id="detail-method-pill" class="px-2.5 py-1 text-xs font-mono font-bold bg-[#ffffff] border border-[#71717a] text-[#0369a1]">GET</span>
           <div>
-            <h2 id="detail-title" class="text-sm font-bold font-mono text-white tracking-tight">Request Details</h2>
-            <p class="text-xs text-slate-400 font-mono mt-0.5" id="detail-timestamp-sub">-</p>
+            <h2 id="detail-title" class="text-sm font-bold font-mono text-[#18181b] uppercase tracking-tight">Request Telemetry Inspector</h2>
+            <p class="text-xs text-[#52525b] font-mono mt-0.5 tabular-nums" id="detail-timestamp-sub">-</p>
           </div>
         </div>
-        <button onclick="closeLogDetailModal()" class="text-slate-400 hover:text-white p-1 rounded transition-colors" aria-label="Close dialog">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <button type="button" onclick="closeLogDetailModal()" class="min-h-[40px] min-w-[40px] sm:min-h-[32px] sm:min-w-[32px] inline-flex items-center justify-center text-[#52525b] hover:text-[#18181b] p-1 transition-colors" aria-label="Close request inspector dialog">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
           </svg>
         </button>
       </div>
 
-      <!-- Modal Body (Scrollable) -->
-      <div class="p-6 space-y-4 overflow-y-auto">
-        
-        <!-- Status & Telemetry Strip -->
+      <div class="p-5 sm:p-6 space-y-4 overflow-y-auto tabular-nums">
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono">
-          <div class="p-2.5 bg-[#0b0f19] border border-[#334155] rounded">
-            <div class="text-[10px] text-slate-400 uppercase font-semibold">STATUS CODE</div>
-            <div id="detail-status" class="mt-1 text-sm font-bold text-emerald-400">200 OK</div>
+          <div class="p-2.5 bg-[#f4f4f5] border border-[#e4e4e7]">
+            <div class="text-[11px] text-[#52525b] uppercase font-semibold">Status Code</div>
+            <div id="detail-status" class="mt-1 text-sm font-bold text-[#047857]">200 OK</div>
           </div>
-          <div class="p-2.5 bg-[#0b0f19] border border-[#334155] rounded">
-            <div class="text-[10px] text-slate-400 uppercase font-semibold">LATENCY</div>
-            <div id="detail-duration" class="mt-1 text-sm font-bold text-cyan-400">0 ms</div>
+          <div class="p-2.5 bg-[#f4f4f5] border border-[#e4e4e7]">
+            <div class="text-[11px] text-[#52525b] uppercase font-semibold">Latency</div>
+            <div id="detail-duration" class="mt-1 text-sm font-bold text-[#0369a1]">0 ms</div>
           </div>
-          <div class="p-2.5 bg-[#0b0f19] border border-[#334155] rounded">
-            <div class="text-[10px] text-slate-400 uppercase font-semibold">PROTOCOL</div>
-            <div id="detail-proto" class="mt-1 text-sm font-bold text-white">HTTP/2.0</div>
+          <div class="p-2.5 bg-[#f4f4f5] border border-[#e4e4e7]">
+            <div class="text-[11px] text-[#52525b] uppercase font-semibold">Protocol</div>
+            <div id="detail-proto" class="mt-1 text-sm font-bold text-[#18181b]">HTTP/2.0</div>
           </div>
-          <div class="p-2.5 bg-[#0b0f19] border border-[#334155] rounded">
-            <div class="text-[10px] text-slate-400 uppercase font-semibold">BYTES SENT</div>
-            <div id="detail-bytes" class="mt-1 text-sm font-bold text-slate-300">0 B</div>
+          <div class="p-2.5 bg-[#f4f4f5] border border-[#e4e4e7]">
+            <div class="text-[11px] text-[#52525b] uppercase font-semibold">Payload Sent</div>
+            <div id="detail-bytes" class="mt-1 text-sm font-bold text-[#18181b]">0 B</div>
           </div>
         </div>
 
-        <!-- Target Forwarding Flow -->
-        <div class="p-3.5 bg-[#0b0f19] border border-[#334155] rounded space-y-2">
-          <div class="text-[10px] font-mono font-semibold text-slate-400 uppercase">PROXY ROUTING PIPELINE</div>
-          <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs font-mono bg-[#171f33] p-2.5 rounded border border-[#334155]">
+        <div class="p-3.5 bg-[#f4f4f5] border border-[#e4e4e7] space-y-2">
+          <div class="text-[11px] font-mono font-bold text-[#52525b] uppercase">Proxy Routing Pipeline</div>
+          <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs font-mono bg-[#ffffff] p-2.5 border border-[#e4e4e7]">
             <div class="flex-1 min-w-0">
-              <span class="text-[10px] text-slate-400 block">CLIENT INCOMING URL</span>
-              <span id="detail-incoming-url" class="text-cyan-400 font-semibold break-all select-all">https://api.local/</span>
+              <span class="text-[11px] text-[#52525b] block">Client Incoming URL</span>
+              <span id="detail-incoming-url" class="text-[#b91c1c] font-bold break-all select-all">https://api.local/</span>
             </div>
-            <div class="text-slate-500 self-center hidden sm:block">&rarr;</div>
+            <div class="text-[#dc2626] self-center hidden sm:block font-bold" aria-hidden="true">&rarr;</div>
             <div class="flex-1 min-w-0">
-              <span class="text-[10px] text-slate-400 block">FORWARDED UPSTREAM</span>
-              <span id="detail-target-url" class="text-[#10b981] font-semibold break-all select-all">http://127.0.0.1:3000/</span>
+              <span class="text-[11px] text-[#52525b] block">Forwarded Upstream Target</span>
+              <span id="detail-target-url" class="text-[#0369a1] font-semibold break-all select-all">http://127.0.0.1:3000/</span>
             </div>
           </div>
         </div>
 
-        <!-- Error Diagnosis Banner (conditional) -->
-        <div id="detail-error-box" class="hidden p-3.5 bg-rose-950/40 border border-rose-800/60 rounded space-y-1.5 text-xs font-mono">
-          <div class="flex items-center gap-2 text-rose-300 font-bold">
-            <svg class="w-4 h-4 text-rose-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-            </svg>
-            <span id="detail-error-title">Proxy Routing Error</span>
+        <div id="detail-error-box" class="hidden p-3.5 bg-[#fef2f2] border border-[#dc2626] space-y-1.5 text-xs font-mono">
+          <div class="flex items-center gap-2 text-[#b91c1c] font-bold">
+            <span id="detail-error-title">Upstream Routing Diagnostic</span>
           </div>
-          <p id="detail-error-msg" class="text-rose-200/90 break-all select-all">-</p>
-          <p id="detail-error-hint" class="text-[11px] text-rose-400 pt-1 border-t border-rose-800/40">-</p>
+          <p id="detail-error-msg" class="text-[#b91c1c] break-all select-all">-</p>
+          <p id="detail-error-hint" class="text-[11px] text-[#52525b] pt-1 border-t border-[#dc2626]/30">-</p>
         </div>
 
-        <!-- Request Details Grid -->
         <div class="space-y-2 text-xs font-mono">
-          <div class="text-[10px] font-semibold text-slate-400 uppercase">REQUEST METADATA</div>
-          <div class="border border-[#334155] rounded divide-y divide-[#334155] bg-[#0b0f19]">
+          <div class="text-[11px] font-bold text-[#52525b] uppercase">Request Metadata</div>
+          <div class="border border-[#e4e4e7] divide-y divide-[#e4e4e7] bg-[#ffffff]">
             <div class="p-2.5 flex justify-between gap-4">
-              <span class="text-slate-400 shrink-0">Client IP:</span>
-              <span id="detail-client-ip" class="text-white text-right break-all">-</span>
+              <span class="text-[#52525b] shrink-0">Client IP:</span>
+              <span id="detail-client-ip" class="text-[#18181b] font-medium text-right break-all">-</span>
             </div>
             <div class="p-2.5 flex justify-between gap-4">
-              <span class="text-slate-400 shrink-0">User Agent:</span>
-              <span id="detail-user-agent" class="text-slate-300 text-right break-all select-all">-</span>
+              <span class="text-[#52525b] shrink-0">User-Agent:</span>
+              <span id="detail-user-agent" class="text-[#18181b] text-right break-all select-all">-</span>
             </div>
             <div class="p-2.5 flex justify-between gap-4">
-              <span class="text-slate-400 shrink-0">Full Timestamp:</span>
-              <span id="detail-timestamp-full" class="text-slate-300 text-right">-</span>
+              <span class="text-[#52525b] shrink-0">Recorded At:</span>
+              <span id="detail-timestamp-full" class="text-[#18181b] text-right">-</span>
             </div>
           </div>
         </div>
 
-        <!-- cURL Replay Snippet -->
         <div class="space-y-1.5 font-mono text-xs">
           <div class="flex justify-between items-center">
-            <span class="text-[10px] font-semibold text-slate-400 uppercase">REPLAY VIA CURL</span>
-            <button onclick="copyDetailCurl()" class="text-[11px] text-cyan-400 hover:text-cyan-300 flex items-center gap-1 transition">
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
-              <span>Copy cURL</span>
+            <span class="text-[11px] font-bold text-[#52525b] uppercase">Reproduce via cURL</span>
+            <button type="button" onclick="copyDetailCurl()" class="min-h-[32px] px-2 text-xs text-[#b91c1c] font-semibold hover:underline inline-flex items-center gap-1 transition">
+              <span>Copy cURL Command</span>
             </button>
           </div>
-          <div class="p-3 bg-[#070a11] border border-[#334155] rounded text-slate-300 select-all overflow-x-auto text-[11px] leading-relaxed" id="detail-curl-command">
+          <div class="p-3 bg-[#f4f4f5] border border-[#e4e4e7] text-[#18181b] select-all overflow-x-auto text-xs leading-relaxed" id="detail-curl-command">
             curl -k -i -X GET "https://..."
           </div>
         </div>
-
       </div>
 
-      <!-- Modal Footer -->
-      <div class="p-4 border-t border-[#334155] flex justify-between items-center bg-[#171f33]">
-        <span class="text-[11px] font-mono text-slate-400">ID: <span id="detail-id" class="text-slate-300"></span></span>
+      <div class="p-4 border-t border-[#e4e4e7] flex justify-between items-center bg-[#f4f4f5]">
+        <span class="text-xs font-mono text-[#52525b] tabular-nums">Entry ID: <span id="detail-id" class="text-[#18181b] font-semibold"></span></span>
         <div class="flex items-center gap-2">
-          <button type="button" onclick="copyDetailCurl()" class="px-3.5 py-1.5 border border-[#334155] text-slate-200 hover:bg-[#0f172a] rounded text-xs font-mono font-medium transition flex items-center gap-1.5">
-            <svg class="w-3.5 h-3.5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
-            <span>Copy cURL</span>
+          <button type="button" onclick="copyDetailCurl()" class="min-h-[44px] sm:min-h-[36px] px-3.5 py-1.5 bg-[#ffffff] border border-[#71717a] text-[#18181b] hover:bg-[#f4f4f5] text-xs font-mono font-medium transition">
+            Copy cURL
           </button>
-          <button type="button" onclick="closeLogDetailModal()" class="px-4 py-1.5 bg-[#10b981] text-slate-950 font-semibold rounded hover:bg-[#059669] transition text-xs font-mono">
-            Close
+          <button type="button" onclick="closeLogDetailModal()" class="min-h-[44px] sm:min-h-[36px] px-4 py-1.5 bg-[#dc2626] hover:bg-[#b91c1c] text-[#ffffff] font-mono font-bold uppercase text-xs transition">
+            Close Inspector
           </button>
         </div>
       </div>
-
     </div>
   </div>
 
-  <!-- TOAST NOTIFICATION STACK -->
-  <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col space-y-2 pointer-events-none"></div>
+  <div id="tunnel-modal" role="dialog" aria-modal="true" aria-labelledby="tunnel-modal-title" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4 bg-black/50 backdrop-blur-[2px]">
+    <div class="relative w-full max-w-lg bg-[#ffffff] border border-[#71717a] border-t-4 border-t-[#dc2626] overflow-hidden max-h-[92dvh] flex flex-col shadow-2xl">
+      <div class="p-4 border-b border-[#e4e4e7] flex justify-between items-center bg-[#f4f4f5]">
+        <div class="flex items-center gap-2">
+          <span class="px-1.5 py-0.5 bg-[#dc2626] text-[#ffffff] font-mono text-[11px] font-bold">SSH -L -N</span>
+          <h3 id="tunnel-modal-title" class="text-sm font-bold font-mono uppercase text-[#18181b]">Configure SSH Port Forward</h3>
+        </div>
+        <button type="button" onclick="closeTunnelModal()" aria-label="Close SSH tunnel dialog" class="min-h-[34px] min-w-[34px] inline-flex items-center justify-center text-[#52525b] hover:text-[#18181b] bg-[#ffffff] border border-[#71717a]">✕</button>
+      </div>
 
-  <!-- APPLICATION JAVASCRIPT LOGIC -->
+      <form id="tunnel-form" onsubmit="handleTunnelFormSubmit(event)" class="p-4 space-y-3.5 overflow-y-auto font-mono text-xs" novalidate>
+        <input type="hidden" id="tunnel-id">
+
+        <div>
+          <label for="tunnel-name" class="block text-[11px] text-[#52525b] font-semibold uppercase mb-1">Profile Label</label>
+          <input id="tunnel-name" type="text" required placeholder="Staging API / Remote Postgres" class="w-full min-h-[38px] bg-[#ffffff] border border-[#71717a] focus:border-[#dc2626] px-3 py-1.5 text-xs text-[#18181b]">
+        </div>
+
+        <div class="grid grid-cols-12 gap-2.5">
+          <div class="col-span-4">
+            <label for="tunnel-user" class="block text-[11px] text-[#52525b] font-semibold uppercase mb-1">SSH User</label>
+            <input id="tunnel-user" type="text" required placeholder="ubuntu" class="w-full min-h-[38px] bg-[#ffffff] border border-[#71717a] focus:border-[#dc2626] px-2.5 py-1.5 text-xs text-[#18181b]">
+          </div>
+          <div class="col-span-5">
+            <label for="tunnel-host" class="block text-[11px] text-[#52525b] font-semibold uppercase mb-1">Bastion / SSH Host</label>
+            <input id="tunnel-host" type="text" required placeholder="bastion.example.com" class="w-full min-h-[38px] bg-[#ffffff] border border-[#71717a] focus:border-[#dc2626] px-2.5 py-1.5 text-xs text-[#18181b]">
+          </div>
+          <div class="col-span-3">
+            <label for="tunnel-ssh-port" class="block text-[11px] text-[#52525b] font-semibold uppercase mb-1">SSH Port</label>
+            <input id="tunnel-ssh-port" type="number" min="1" max="65535" value="22" required class="w-full min-h-[38px] bg-[#ffffff] border border-[#71717a] focus:border-[#dc2626] px-2.5 py-1.5 text-xs text-[#18181b] tabular-nums">
+          </div>
+        </div>
+
+        <div class="p-3 bg-[#f4f4f5] border border-[#e4e4e7] space-y-2.5">
+          <div class="text-[11px] font-bold text-[#b91c1c] uppercase">Port Forwarding Mapping (-L LocalPort:RemoteHost:RemotePort)</div>
+          <div class="grid grid-cols-12 gap-2.5">
+            <div class="col-span-4">
+              <label for="tunnel-local-port" class="block text-[11px] text-[#52525b] font-semibold mb-1">Local Port (127.0.0.1)</label>
+              <input id="tunnel-local-port" type="number" min="1" max="65535" required placeholder="9000" class="w-full min-h-[36px] bg-[#ffffff] border border-[#71717a] focus:border-[#dc2626] px-2.5 py-1 text-xs text-[#b91c1c] font-bold tabular-nums">
+            </div>
+            <div class="col-span-5">
+              <label for="tunnel-remote-host" class="block text-[11px] text-[#52525b] font-semibold mb-1">Remote Target Host</label>
+              <input id="tunnel-remote-host" type="text" required value="127.0.0.1" placeholder="127.0.0.1" class="w-full min-h-[36px] bg-[#ffffff] border border-[#71717a] focus:border-[#dc2626] px-2.5 py-1 text-xs text-[#18181b]">
+            </div>
+            <div class="col-span-3">
+              <label for="tunnel-remote-port" class="block text-[11px] text-[#52525b] font-semibold mb-1">Remote Port</label>
+              <input id="tunnel-remote-port" type="number" min="1" max="65535" required placeholder="8080" class="w-full min-h-[36px] bg-[#ffffff] border border-[#71717a] focus:border-[#dc2626] px-2.5 py-1 text-xs text-[#0369a1] font-bold tabular-nums">
+            </div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-12 gap-2.5">
+          <div class="col-span-5">
+            <label for="tunnel-auth-type" class="block text-[11px] text-[#52525b] font-semibold uppercase mb-1">Auth Method</label>
+            <select id="tunnel-auth-type" onchange="syncTunnelAuthFields()" class="w-full min-h-[38px] bg-[#ffffff] border border-[#71717a] px-2.5 py-1.5 text-xs text-[#18181b]">
+              <option value="key">Private Key File</option>
+              <option value="password">Password Auth</option>
+              <option value="agent">SSH Agent + Key</option>
+            </select>
+          </div>
+          <div id="tunnel-key-path-group" class="col-span-7">
+            <label for="tunnel-key-path" class="block text-[11px] text-[#52525b] font-semibold uppercase mb-1">Private Key Path</label>
+            <input id="tunnel-key-path" type="text" value="~/.ssh/id_ed25519" placeholder="~/.ssh/id_ed25519" class="w-full min-h-[38px] bg-[#ffffff] border border-[#71717a] focus:border-[#dc2626] px-2.5 py-1.5 text-xs text-[#18181b]">
+          </div>
+        </div>
+
+        <div>
+          <label for="tunnel-secret" id="tunnel-secret-label" class="block text-[11px] text-[#52525b] font-semibold uppercase mb-1">Key Passphrase (Optional)</label>
+          <input id="tunnel-secret" type="password" autocomplete="new-password" placeholder="Leave blank if unencrypted or prompt on connect" class="w-full min-h-[38px] bg-[#ffffff] border border-[#71717a] focus:border-[#dc2626] px-3 py-1.5 text-xs text-[#18181b]">
+        </div>
+
+        <div class="space-y-2 pt-1 border-t border-[#e4e4e7]">
+          <label class="flex items-center justify-between gap-2 cursor-pointer">
+            <span class="text-[#18181b]">Save password / passphrase in local config (<code class="text-[#b91c1c] font-semibold">tunnels.json</code>)</span>
+            <input id="tunnel-save-secret" type="checkbox" checked class="w-4 h-4 accent-[#dc2626]">
+          </label>
+          <label class="flex items-center justify-between gap-2 cursor-pointer">
+            <span class="text-[#18181b]">Auto-connect tunnel when Reverse.Local starts</span>
+            <input id="tunnel-auto-connect" type="checkbox" class="w-4 h-4 accent-[#dc2626]">
+          </label>
+        </div>
+
+        <div id="tunnel-form-error" role="alert" class="hidden p-2.5 bg-[#fef2f2] border border-[#dc2626] text-[#b91c1c] text-xs"></div>
+
+        <div class="pt-2 border-t border-[#e4e4e7] flex justify-end gap-2">
+          <button type="button" onclick="closeTunnelModal()" class="min-h-[38px] px-4 py-1.5 bg-[#ffffff] border border-[#71717a] text-[#18181b] text-xs font-mono">Cancel</button>
+          <button type="submit" id="btn-save-tunnel" class="min-h-[38px] px-4 py-1.5 bg-[#dc2626] hover:bg-[#b91c1c] text-[#ffffff] font-mono font-bold text-xs uppercase">Save Profile</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="tunnel-secret-modal" role="dialog" aria-modal="true" aria-labelledby="tunnel-secret-modal-title" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4 bg-black/50 backdrop-blur-[2px]">
+    <div class="relative w-full max-w-sm bg-[#ffffff] border border-[#71717a] border-t-4 border-t-[#dc2626] p-4 space-y-3.5 font-mono text-xs shadow-2xl">
+      <div class="flex items-center justify-between border-b border-[#e4e4e7] pb-2.5">
+        <h3 id="tunnel-secret-modal-title" class="text-xs font-bold uppercase text-[#18181b]">SSH Authentication Required</h3>
+        <button type="button" onclick="closeTunnelSecretModal()" aria-label="Close prompt" class="text-[#52525b] hover:text-[#18181b]">✕</button>
+      </div>
+      <p id="tunnel-secret-prompt-text" class="text-[#52525b]">Enter password or private key passphrase for this SSH session:</p>
+      <form onsubmit="submitTunnelRuntimeSecret(event)" class="space-y-3">
+        <input type="hidden" id="runtime-secret-tunnel-id">
+        <input id="runtime-secret-input" type="password" required placeholder="Password or Passphrase" class="w-full min-h-[38px] bg-[#ffffff] border border-[#71717a] focus:border-[#dc2626] px-3 py-1.5 text-xs text-[#18181b]">
+        <div class="flex justify-end gap-2">
+          <button type="button" onclick="closeTunnelSecretModal()" class="min-h-[36px] px-3 py-1 bg-[#ffffff] border border-[#71717a] text-[#18181b]">Cancel</button>
+          <button type="submit" id="btn-submit-runtime-secret" class="min-h-[36px] px-3.5 py-1 bg-[#dc2626] hover:bg-[#b91c1c] text-[#ffffff] font-bold uppercase">Connect</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="docs-modal" onclick="if (event.target === this) closeDocsModal()" role="dialog" aria-modal="true" aria-labelledby="docs-modal-title" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4 bg-black/50 backdrop-blur-[2px]">
+    <div class="bg-[#ffffff] border border-[#71717a] border-t-4 border-t-[#dc2626] w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[90dvh]">
+      <div class="p-4 sm:p-5 border-b border-[#e4e4e7] flex justify-between items-start bg-[#f4f4f5]">
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="px-2 py-0.5 bg-[#dc2626] text-[#ffffff] font-mono text-[11px] font-bold">DOCS // MANUAL</span>
+            <h2 id="docs-modal-title" class="text-sm font-bold font-mono text-[#18181b] uppercase tracking-tight">Reverse.Local User Guide &amp; Architecture Manual</h2>
+          </div>
+          <p class="text-xs text-[#52525b] font-mono mt-1">Complete reference for Domain Routing, Native Go SSH Tunneling (-L -N), LAN DNS Broadcast, Persistence &amp; OS Installers.</p>
+        </div>
+        <button type="button" onclick="closeDocsModal()" aria-label="Close documentation dialog" class="min-h-[36px] min-w-[36px] inline-flex items-center justify-center text-[#52525b] hover:text-[#18181b] p-1">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+          </svg>
+        </button>
+      </div>
+
+      <div class="border-b border-[#e4e4e7] bg-[#fafafa] px-4 flex flex-wrap gap-1 font-mono text-xs">
+        <button type="button" id="docs-tab-btn-quickstart" onclick="switchDocsTab('quickstart')" class="min-h-[38px] px-3 py-2 border-b-2 border-[#dc2626] text-[#b91c1c] font-bold">
+          [01] Domain Routing &amp; SSL
+        </button>
+        <button type="button" id="docs-tab-btn-ssh" onclick="switchDocsTab('ssh')" class="min-h-[38px] px-3 py-2 border-b-2 border-transparent text-[#52525b] hover:text-[#18181b]">
+          [02] SSH Tunneling (-L -N)
+        </button>
+        <button type="button" id="docs-tab-btn-lan" onclick="switchDocsTab('lan')" class="min-h-[38px] px-3 py-2 border-b-2 border-transparent text-[#52525b] hover:text-[#18181b]">
+          [03] LAN &amp; Wi-Fi Broadcast
+        </button>
+        <button type="button" id="docs-tab-btn-storage" onclick="switchDocsTab('storage')" class="min-h-[38px] px-3 py-2 border-b-2 border-transparent text-[#52525b] hover:text-[#18181b]">
+          [04] Saved Configs &amp; Backup
+        </button>
+        <button type="button" id="docs-tab-btn-install" onclick="switchDocsTab('install')" class="min-h-[38px] px-3 py-2 border-b-2 border-transparent text-[#52525b] hover:text-[#18181b]">
+          [05] Windows &amp; macOS Installers
+        </button>
+      </div>
+
+      <div class="p-5 sm:p-6 overflow-y-auto space-y-5 text-xs leading-relaxed">
+        <!-- TAB 01: QUICK START & DOMAIN ROUTING -->
+        <div id="docs-panel-quickstart" class="space-y-4">
+          <div class="p-3.5 bg-[#fef2f2] border border-[#dc2626] font-mono">
+            <div class="font-bold text-[#b91c1c] uppercase mb-1">Automatic Administrator Elevation</div>
+            <p class="text-[#18181b]">When you double-click <code class="font-semibold">reverse-local.exe</code>, it automatically requests <strong>Run as Administrator</strong> privileges so it can bind ports <code class="font-semibold">80</code> and <code class="font-semibold">443</code>, synchronize your OS <code class="font-semibold">hosts</code> file, and register the local Root CA.</p>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3 font-mono">
+            <div class="p-3.5 bg-[#f4f4f5] border border-[#e4e4e7]">
+              <div class="text-[#dc2626] font-bold mb-1">STEP 1 // TRUST ROOT CA</div>
+              <p class="text-[#52525b]">On first launch, Reverse.Local generates a 10-year RSA-2048 Root CA and installs it in your OS trust store. You can also click <strong>Trust CA</strong> or download <code class="text-[#18181b]">/ca.crt</code> from the top bar.</p>
+            </div>
+            <div class="p-3.5 bg-[#f4f4f5] border border-[#e4e4e7]">
+              <div class="text-[#dc2626] font-bold mb-1">STEP 2 // MAP A DOMAIN</div>
+              <p class="text-[#52525b]">In <strong>[01] Domain Routing Matrix</strong>, enter a domain (e.g. <code class="text-[#b91c1c]">api.project.local</code>) and your local port (e.g. <code class="text-[#0369a1]">http://127.0.0.1:3000</code>), then click <strong>Bind Route</strong>.</p>
+            </div>
+            <div class="p-3.5 bg-[#f4f4f5] border border-[#e4e4e7]">
+              <div class="text-[#dc2626] font-bold mb-1">STEP 3 // OPEN HTTPS URL</div>
+              <p class="text-[#52525b]">Visit <code class="text-[#047857] font-semibold">https://api.project.local</code> in any browser. Reverse.Local signs an on-the-fly TLS certificate via SNI and proxies HTTP &amp; WebSocket traffic.</p>
+            </div>
+          </div>
+
+          <div class="border border-[#e4e4e7] p-4 space-y-2 font-mono">
+            <h3 class="font-bold text-[#18181b] uppercase">How Automatic Hosts Synchronization Works</h3>
+            <p class="text-[#52525b]">Every active domain is written inside an isolated block (<code class="text-[#18181b]"># BEGIN LOCAL-REVERSE-PROXY</code> ... <code class="text-[#18181b]"># END LOCAL-REVERSE-PROXY</code>) in <code class="text-[#18181b]">C:\Windows\System32\drivers\etc\hosts</code> (Windows) or <code class="text-[#18181b]">/etc/hosts</code> (macOS/Linux). Your custom manual host entries outside this block are never modified.</p>
+          </div>
+        </div>
+
+        <!-- TAB 02: NATIVE GO SSH TUNNELING -->
+        <div id="docs-panel-ssh" class="hidden space-y-4">
+          <div class="p-3.5 bg-[#f4f4f5] border border-[#e4e4e7] font-mono">
+            <div class="font-bold text-[#18181b] uppercase mb-1">Built-In Pure Go SSH Local Port Forwarding (<code class="text-[#b91c1c]">ssh -L -N</code>)</div>
+            <p class="text-[#52525b]">No external PuTTY or OpenSSH CLI process is required. Reverse.Local uses <code class="text-[#18181b]">golang.org/x/crypto/ssh</code> to dial your remote jump host, keep the connection alive, auto-reconnect on network drops, and forward local ports to remote private services.</p>
+          </div>
+
+          <div class="space-y-3 font-mono">
+            <div class="border border-[#e4e4e7] p-3.5">
+              <div class="font-bold text-[#dc2626] uppercase mb-1">1. Create an SSH Tunnel Profile</div>
+              <p class="text-[#52525b]">In <strong>[01B] Native Go SSH Port Forwarding (-L -N)</strong>, click <strong>+ New SSH Tunnel</strong> and provide:</p>
+              <ul class="list-disc list-inside mt-1.5 text-[#18181b] space-y-1">
+                <li><strong>SSH Server</strong>: <code class="text-[#0369a1]">user@bastion.example.com:22</code></li>
+                <li><strong>Local Bind Port</strong>: e.g. <code class="text-[#047857]">127.0.0.1:15432</code> or <code class="text-[#047857]">127.0.0.1:18080</code></li>
+                <li><strong>Remote Target Host &amp; Port</strong>: e.g. <code class="text-[#b91c1c]">10.0.0.12:8080</code> (reachable from the SSH server)</li>
+                <li><strong>Authentication</strong>: Private Key (<code class="text-[#18181b]">~/.ssh/id_ed25519</code>), Password, or OS SSH Agent.</li>
+              </ul>
+            </div>
+
+            <div class="border border-[#e4e4e7] p-3.5">
+              <div class="font-bold text-[#dc2626] uppercase mb-1">2. Bind a Local HTTPS Domain to an SSH Tunnel in 1 Click</div>
+              <p class="text-[#52525b]">Once a tunnel is created, click <strong>Bind Domain</strong> on the tunnel card. It pre-fills <code class="text-[#0369a1]">http://127.0.0.1:&lt;local_port&gt;</code> in the Domain Route editor so you can access a remote staging API via <code class="text-[#b91c1c]">https://staging-api.local</code> with full HTTPS and live traffic inspection.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 03: LAN & WI-FI DNS BROADCAST -->
+        <div id="docs-panel-lan" class="hidden space-y-4">
+          <div class="p-3.5 bg-[#ecfdf5] border border-[#047857] font-mono">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <div class="font-bold text-[#047857] uppercase">Detected Host LAN IPv4: <span id="docs-lan-ip" class="text-[#18181b] underline">127.0.0.1</span></div>
+                <p class="text-[#52525b] mt-0.5">Yes! Other computers, phones, and tablets on the same Wi-Fi/LAN can resolve and open domains created on this machine.</p>
+              </div>
+              <button type="button" onclick="enableLANFromDocs(this)" class="min-h-[34px] px-3 py-1.5 bg-[#dc2626] hover:bg-[#b91c1c] text-[#ffffff] font-bold text-xs uppercase transition">
+                Enable Full LAN Mode (0.0.0.0 + DNS)
+              </button>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5 font-mono">
+            <div class="border border-[#e4e4e7] p-4 bg-[#ffffff] space-y-2">
+              <div class="inline-block px-2 py-0.5 bg-[#fef2f2] border border-[#dc2626] text-[#b91c1c] font-bold text-[11px]">MODE A // ZERO-CONFIG mDNS (UDP :5353)</div>
+              <h3 class="font-bold text-[#18181b] uppercase">Automatic for <code class="text-[#b91c1c]">.local</code> Domains</h3>
+              <p class="text-[#52525b]">Reverse.Local includes a built-in Multicast DNS (<code class="text-[#18181b]">224.0.0.251:5353</code>) responder. When you set Bind Interface to <code class="text-[#18181b]">0.0.0.0</code>, any Windows, macOS, iOS, or Linux device on the same Wi-Fi automatically resolves <code class="text-[#047857]">https://&lt;name&gt;.local</code> to <span class="docs-lan-ip-inline font-semibold text-[#18181b]">your LAN IP</span> without changing DNS settings.</p>
+              <p class="text-[11px] text-[#52525b] pt-1 border-t border-[#e4e4e7]">Note: For subdomain routes (e.g. <code class="text-[#18181b]">api.app.local</code>) or Android devices, use Mode B (LAN DNS Server) below.</p>
+            </div>
+
+            <div class="border border-[#e4e4e7] p-4 bg-[#ffffff] space-y-2">
+              <div class="inline-block px-2 py-0.5 bg-[#f0f9ff] border border-[#0369a1] text-[#0369a1] font-bold text-[11px]">MODE B // LAN DNS SERVER (UDP :53)</div>
+              <h3 class="font-bold text-[#18181b] uppercase">Works for All Devices &amp; Any Domain (<code class="text-[#0369a1]">.local, .test, .dev</code>)</h3>
+              <p class="text-[#52525b]">Reverse.Local also runs a lightweight UDP Port 53 DNS responder. Point your phone, other PC, or Wi-Fi router's Primary DNS Server to <strong class="docs-lan-ip-inline text-[#b91c1c]">192.168.x.x</strong>:</p>
+              <ul class="list-disc list-inside text-[#18181b] space-y-1">
+                <li>Queries for your active routes return <strong class="docs-lan-ip-inline text-[#047857]">your LAN IP</strong></li>
+                <li>All other internet queries are transparently forwarded to <code class="text-[#0369a1]">8.8.8.8</code> / <code class="text-[#0369a1]">1.1.1.1</code>.</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="border border-[#e4e4e7] p-3.5 bg-[#f4f4f5] font-mono space-y-1.5">
+            <div class="font-bold text-[#18181b] uppercase">Trusting HTTPS Certificates on Other LAN Devices</div>
+            <p class="text-[#52525b]">On the other computer or phone, open <code class="text-[#b91c1c] font-semibold">http://<span class="docs-lan-ip-inline">192.168.x.x</span>/ca.crt</code> to download and install the Reverse.Local Root CA certificate. Leaf certificates automatically include your LAN IPv4 address in their SANs.</p>
+          </div>
+        </div>
+
+        <!-- TAB 04: SAVED CONFIGS & BACKUP -->
+        <div id="docs-panel-storage" class="hidden space-y-4 font-mono">
+          <div class="p-3.5 bg-[#f4f4f5] border border-[#e4e4e7] space-y-2">
+            <div class="font-bold text-[#18181b] uppercase">Automatic Disk Persistence</div>
+            <p class="text-[#52525b]">Every domain route, SSH tunnel profile, and daemon setting you create is immediately saved to disk using atomic file writes (temp-file + rename) in your OS configuration directory:</p>
+            <div class="bg-[#ffffff] border border-[#e4e4e7] p-2.5 text-[#18181b] space-y-1 select-all">
+              <div><strong>Directory:</strong> <span id="docs-config-dir" class="text-[#0369a1]">%AppData%\reverse-local</span></div>
+              <div><strong>Domain Routes:</strong> <code>routes.json</code></div>
+              <div><strong>SSH Tunnel Profiles (-L -N):</strong> <code>tunnels.json</code></div>
+              <div><strong>Daemon &amp; Network Settings:</strong> <code>settings.json</code></div>
+              <div><strong>Root CA Keypair:</strong> <code>certs/ca.crt</code> &amp; <code>certs/ca.key</code></div>
+            </div>
+          </div>
+
+          <div class="border border-[#e4e4e7] p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div>
+              <div class="font-bold text-[#18181b] uppercase">Portable JSON Backup &amp; Restore</div>
+              <p class="text-[#52525b] mt-0.5">Export all domains, SSH tunnel configs, and daemon settings into a single <code class="text-[#b91c1c]">reverse-local-backup.json</code> file, or import an existing backup.</p>
+            </div>
+            <div class="flex items-center gap-2 shrink-0">
+              <a href="/api/backup" download="reverse-local-backup.json" class="min-h-[36px] px-3.5 py-1.5 bg-[#dc2626] hover:bg-[#b91c1c] text-[#ffffff] font-bold uppercase inline-flex items-center">
+                Export Backup (.json)
+              </a>
+              <button type="button" onclick="document.getElementById('wb-backup-input').click()" class="min-h-[36px] px-3.5 py-1.5 bg-[#ffffff] border border-[#71717a] hover:border-[#047857] text-[#047857] font-bold uppercase">
+                Import Backup
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 05: WINDOWS & MACOS INSTALLERS -->
+        <div id="docs-panel-install" class="hidden space-y-4 font-mono">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="border border-[#e4e4e7] p-4 space-y-2">
+              <div class="text-[#dc2626] font-bold uppercase">[WINDOWS] Native .MSI Installer</div>
+              <p class="text-[#52525b]">Ready-to-run package in <code class="text-[#18181b]">dist/ReverseLocal-1.2.0-x64.msi</code>:</p>
+              <ul class="list-disc list-inside text-[#18181b] space-y-1">
+                <li><strong>Direct Windows Installer (<code>.msi</code>)</strong> built via native <code>msi.dll</code> &amp; <code>makecab.exe</code> (<code>installer/windows/build-msi.ps1</code> &amp; WiX <code>Product.wxs</code>).</li>
+                <li>Installs to <code>C:\Program Files\ReverseLocal\reverse-local.exe</code> and registers in Windows Installed Apps.</li>
+                <li>Creates Desktop &amp; Start Menu shortcuts (`Reverse.Local`).</li>
+                <li>Also includes <code>install-windows.bat</code> for 1-click Firewall + UAC setup.</li>
+              </ul>
+            </div>
+
+            <div class="border border-[#e4e4e7] p-4 space-y-2">
+              <div class="text-[#dc2626] font-bold uppercase">[macOS] Universal .DMG Disk Image</div>
+              <p class="text-[#52525b]">Ready-to-mount disk image in <code class="text-[#18181b]">dist/ReverseLocal-1.2.0-macOS.dmg</code>:</p>
+              <ul class="list-disc list-inside text-[#18181b] space-y-1">
+                <li><strong>Direct macOS Disk Image (<code>.dmg</code>)</strong> containing Universal <code>Reverse.Local.app</code> (Apple Silicon <code>arm64</code> + Intel <code>x86_64</code> Mach-O Fat Binary).</li>
+                <li>Built via <code>installer/macos/build-dmg.sh</code> (<code>hdiutil</code>) or cross-compiled via <code>installer/macos/make_dmg.go</code>.</li>
+                <li>Drag <code>Reverse.Local.app</code> to <code>/Applications</code> and launch.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="p-4 border-t border-[#e4e4e7] bg-[#f4f4f5] flex justify-between items-center font-mono text-xs">
+        <span class="text-[#52525b]">Desktop Control Panel is locked to <strong class="text-[#18181b]">480x660px</strong> (non-maximizable).</span>
+        <button type="button" onclick="closeDocsModal()" class="min-h-[36px] px-4 py-1.5 bg-[#dc2626] hover:bg-[#b91c1c] text-[#ffffff] font-bold uppercase">
+          Close Guide
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast-container" aria-live="polite" aria-atomic="true" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
   <script>
     let routes = [];
+    let tunnels = [];
     let logs = [];
+    let routesLoadedOnce = false;
+    let tunnelsLoadedOnce = false;
+    let logsLoadedOnce = false;
     let currentFilter = 'all';
     let currentLogStatusFilter = 'all';
     let routeToDeleteId = null;
     let sseEventSource = null;
     let isStreamPaused = false;
+    let selectedLogEntry = null;
+    let lastFocusedElement = null;
 
     document.addEventListener('DOMContentLoaded', () => {
       fetchStatus();
       fetchRoutes();
+      fetchTunnels();
       fetchLogs();
       setupSSELogs();
 
       setInterval(fetchRoutesQuiet, 5000);
+      setInterval(fetchTunnelsQuiet, 3500);
       setInterval(fetchStatus, 10000);
 
-      // Keyboard navigation
-      document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') {
-          closeModal();
-          closeDeleteModal();
-          closeLogDetailModal();
+      document.addEventListener('keydown', handleGlobalKeydown);
+
+      if (window.location.hash === '#docs') {
+        openDocsModal();
+      }
+      window.addEventListener('hashchange', () => {
+        if (window.location.hash === '#docs') {
+          openDocsModal();
         }
       });
     });
 
-    // -------------------------------------------------------------
-    // LOGS & SSE STREAMING
-    // -------------------------------------------------------------
+    function handleGlobalKeydown(e) {
+      const openDialog = getActiveModal();
+      if (!openDialog) return;
+
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        if (openDialog.id === 'modal') closeModal();
+        else if (openDialog.id === 'delete-modal') closeDeleteModal();
+        else if (openDialog.id === 'log-detail-modal') closeLogDetailModal();
+        else if (openDialog.id === 'tunnel-modal') closeTunnelModal();
+        else if (openDialog.id === 'tunnel-secret-modal') closeTunnelSecretModal();
+        else if (openDialog.id === 'docs-modal') closeDocsModal();
+        return;
+      }
+
+      if (e.key === 'Tab') {
+        const focusables = openDialog.querySelectorAll(
+          'button:not([disabled]), [href], input:not([disabled]):not([type="hidden"]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        );
+        if (focusables.length === 0) return;
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    }
+
+    function getActiveModal() {
+      const ids = ['modal', 'delete-modal', 'log-detail-modal', 'tunnel-modal', 'tunnel-secret-modal', 'docs-modal'];
+      for (const id of ids) {
+        const el = document.getElementById(id);
+        if (el && !el.classList.contains('hidden')) return el;
+      }
+      return null;
+    }
+
+    function restoreFocus() {
+      if (lastFocusedElement && typeof lastFocusedElement.focus === 'function') {
+        lastFocusedElement.focus();
+      }
+      lastFocusedElement = null;
+    }
+
     function setupSSELogs() {
       if (sseEventSource) {
         sseEventSource.close();
@@ -728,9 +1102,13 @@
 
       sseEventSource = new EventSource('/api/logs/stream');
       const statusEl = document.getElementById('sse-status');
+      const footerState = document.getElementById('logs-footer-stream-state');
 
       sseEventSource.onopen = () => {
-        statusEl.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-[#10b981]"></span> Live (SSE)`;
+        statusEl.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-[#047857]" aria-hidden="true"></span><span>SSE Live</span>`;
+        if (!isStreamPaused && footerState) {
+          footerState.textContent = 'SSE stream connected';
+        }
       };
 
       sseEventSource.onmessage = (event) => {
@@ -744,20 +1122,34 @@
       };
 
       sseEventSource.onerror = () => {
-        statusEl.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span> Polling`;
-        // Fallback polling if SSE fails
+        statusEl.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-[#b45309]" aria-hidden="true"></span><span>Polling</span>`;
+        if (footerState) footerState.textContent = 'SSE reconnecting (polling fallback)';
         setTimeout(fetchLogsQuiet, 3000);
       };
     }
 
     async function fetchLogs() {
+      const loadingEl = document.getElementById('logs-loading-state');
+      const errorEl = document.getElementById('logs-error-state');
+      if (!logsLoadedOnce) {
+        loadingEl.classList.remove('hidden');
+      }
+      errorEl.classList.add('hidden');
+
       try {
         const res = await fetch('/api/logs?limit=250');
-        if (!res.ok) return;
+        if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to load access logs`);
         logs = await res.json();
+        logsLoadedOnce = true;
+        loadingEl.classList.add('hidden');
         renderLogs();
       } catch (err) {
-        console.warn('Logs fetch error:', err);
+        loadingEl.classList.add('hidden');
+        document.getElementById('logs-table-wrapper').classList.add('hidden');
+        document.getElementById('logs-empty-state').classList.add('hidden');
+        document.getElementById('logs-filtered-empty-state').classList.add('hidden');
+        document.getElementById('logs-error-message').textContent = err.message || 'Could not load access logs from the local daemon.';
+        errorEl.classList.remove('hidden');
       }
     }
 
@@ -767,6 +1159,9 @@
         const res = await fetch('/api/logs?limit=250');
         if (!res.ok) return;
         logs = await res.json();
+        logsLoadedOnce = true;
+        document.getElementById('logs-loading-state').classList.add('hidden');
+        document.getElementById('logs-error-state').classList.add('hidden');
         renderLogs();
       } catch (e) {}
     }
@@ -775,26 +1170,29 @@
       isStreamPaused = !isStreamPaused;
       const btnText = document.getElementById('stream-btn-text');
       const btnIcon = document.getElementById('stream-btn-icon');
-      const pulseEl = document.getElementById('log-pulse');
+      const indicator = document.getElementById('log-stream-indicator');
+      const footerState = document.getElementById('logs-footer-stream-state');
 
       if (isStreamPaused) {
-        btnText.textContent = 'Resume';
-        btnIcon.className = 'w-2 h-2 rounded-full bg-amber-400';
-        pulseEl.classList.remove('animate-ping');
-        showToast('Logs streaming paused', 'info');
+        btnText.textContent = 'Resume Stream';
+        btnIcon.className = 'w-2 h-2 rounded-full bg-[#b45309]';
+        indicator.className = 'w-2 h-2 rounded-full bg-[#b45309]';
+        if (footerState) footerState.textContent = 'Stream paused';
+        showToast('Access log stream paused', 'info');
       } else {
-        btnText.textContent = 'Pause';
-        btnIcon.className = 'w-2 h-2 rounded-full bg-[#10b981]';
-        pulseEl.classList.add('animate-ping');
+        btnText.textContent = 'Pause Stream';
+        btnIcon.className = 'w-2 h-2 rounded-full bg-[#047857]';
+        indicator.className = 'w-2 h-2 rounded-full bg-[#047857]';
+        if (footerState) footerState.textContent = 'SSE stream connected';
         fetchLogs();
-        showToast('Logs streaming resumed', 'success');
+        showToast('Access log stream resumed', 'success');
       }
     }
 
     async function clearLogs() {
       try {
         const res = await fetch('/api/logs', { method: 'DELETE' });
-        if (!res.ok) throw new Error('Failed to clear logs');
+        if (!res.ok) throw new Error('Failed to clear access logs');
         logs = [];
         renderLogs();
         showToast('Access logs cleared', 'info');
@@ -806,19 +1204,21 @@
     function setLogStatusFilter(status) {
       currentLogStatusFilter = status;
       document.querySelectorAll('#log-filter-all, #log-filter-2xx, #log-filter-3xx, #log-filter-4xx, #log-filter-5xx').forEach(el => {
-        el.className = 'px-2 py-0.5 rounded text-slate-400 hover:text-white transition';
+        el.className = 'min-h-[36px] sm:min-h-[26px] px-2.5 py-0.5 text-[#52525b] hover:text-[#18181b] transition';
       });
       const activeBtn = document.getElementById(`log-filter-${status}`);
       if (activeBtn) {
-        activeBtn.className = 'px-2 py-0.5 rounded bg-[#1e293b] text-[#10b981] font-semibold';
+        activeBtn.className = 'min-h-[36px] sm:min-h-[26px] px-2.5 py-0.5 bg-[#dc2626] text-[#ffffff] font-bold';
       }
       renderLogs();
     }
 
-    let selectedLogEntry = null;
+    function resetLogFilters() {
+      document.getElementById('log-search-input').value = '';
+      setLogStatusFilter('all');
+    }
 
     function renderLogs() {
-      // Update Telemetry Counters
       const totalCount = logs.length;
       let count2xx = 0, count3xx = 0, countErr = 0, totalDuration = 0;
       logs.forEach(l => {
@@ -829,16 +1229,11 @@
       });
       const avgLat = totalCount > 0 ? Math.round(totalDuration / totalCount) : 0;
 
-      const statTotal = document.getElementById('stat-total');
-      if (statTotal) statTotal.textContent = totalCount;
-      const stat2xx = document.getElementById('stat-2xx');
-      if (stat2xx) stat2xx.textContent = count2xx;
-      const stat3xx = document.getElementById('stat-3xx');
-      if (stat3xx) stat3xx.textContent = count3xx;
-      const statErr = document.getElementById('stat-err');
-      if (statErr) statErr.textContent = countErr;
-      const statAvgLat = document.getElementById('stat-avg-lat');
-      if (statAvgLat) statAvgLat.textContent = `${avgLat} ms`;
+      document.getElementById('stat-total').textContent = totalCount;
+      document.getElementById('stat-2xx').textContent = count2xx;
+      document.getElementById('stat-3xx').textContent = count3xx;
+      document.getElementById('stat-err').textContent = countErr;
+      document.getElementById('stat-avg-lat').textContent = `${avgLat} ms`;
 
       const query = (document.getElementById('log-search-input').value || '').toLowerCase().trim();
       let filtered = logs.filter(l => {
@@ -846,6 +1241,7 @@
           l.host.toLowerCase().includes(query) ||
           l.path.toLowerCase().includes(query) ||
           l.method.toLowerCase().includes(query) ||
+          String(l.status_code).includes(query) ||
           l.target_url.toLowerCase().includes(query) ||
           (l.error && l.error.toLowerCase().includes(query));
 
@@ -858,84 +1254,79 @@
         return true;
       });
 
+      const wrapper = document.getElementById('logs-table-wrapper');
       const tbody = document.getElementById('logs-table-body');
       const emptyState = document.getElementById('logs-empty-state');
+      const filteredEmptyState = document.getElementById('logs-filtered-empty-state');
+
       document.getElementById('metric-total-requests').textContent = logs.length;
       document.getElementById('nav-logs-badge').textContent = logs.length;
+      const mobileBadge = document.getElementById('mobile-nav-logs-badge');
+      if (mobileBadge) mobileBadge.textContent = logs.length;
       document.getElementById('logs-showing-count').textContent = filtered.length;
 
-      if (filtered.length === 0) {
+      if (logs.length === 0) {
         tbody.innerHTML = '';
+        wrapper.classList.add('hidden');
+        filteredEmptyState.classList.add('hidden');
         emptyState.classList.remove('hidden');
         return;
       }
 
+      if (filtered.length === 0) {
+        tbody.innerHTML = '';
+        wrapper.classList.add('hidden');
+        emptyState.classList.add('hidden');
+        filteredEmptyState.classList.remove('hidden');
+        return;
+      }
+
       emptyState.classList.add('hidden');
+      filteredEmptyState.classList.add('hidden');
+      wrapper.classList.remove('hidden');
+
       tbody.innerHTML = filtered.map(l => {
         const timeStr = l.timestamp ? new Date(l.timestamp).toTimeString().split(' ')[0] : '-';
 
-        // Method color
-        let methodColor = 'bg-[#171f33] text-cyan-400 border border-[#334155]';
-        if (l.method === 'POST') methodColor = 'bg-blue-950/60 text-blue-400 border border-blue-800/40';
-        else if (l.method === 'PUT') methodColor = 'bg-amber-950/60 text-amber-400 border border-amber-800/40';
-        else if (l.method === 'DELETE') methodColor = 'bg-rose-950/60 text-rose-400 border border-rose-800/40';
-        else if (l.proto === 'WebSocket') methodColor = 'bg-purple-950/60 text-purple-400 border border-purple-800/40';
+        let methodColor = 'bg-[#f0f9ff] text-[#0369a1] border border-[#0369a1]';
+        if (l.method === 'POST') methodColor = 'bg-[#ecfdf5] text-[#047857] border border-[#047857]';
+        else if (l.method === 'PUT') methodColor = 'bg-[#fffbeb] text-[#b45309] border border-[#b45309]';
+        else if (l.method === 'DELETE') methodColor = 'bg-[#fef2f2] text-[#b91c1c] border border-[#dc2626]';
 
-        // Status code color
-        let statusBadge = 'bg-emerald-950/50 text-[#34d399] border border-emerald-800/40';
-        if (l.status_code >= 300 && l.status_code < 400) statusBadge = 'bg-blue-950/50 text-blue-300 border border-blue-800/40';
-        else if (l.status_code >= 400 && l.status_code < 500) statusBadge = 'bg-amber-950/50 text-amber-300 border border-amber-800/40';
-        else if (l.status_code >= 500) statusBadge = 'bg-rose-950/50 text-rose-300 border border-rose-800/40';
+        let statusBadge = 'text-[#047857]';
+        if (l.status_code >= 300 && l.status_code < 400) statusBadge = 'text-[#0369a1]';
+        else if (l.status_code >= 400 && l.status_code < 500) statusBadge = 'text-[#b45309]';
+        else if (l.status_code >= 500) statusBadge = 'text-[#b91c1c]';
 
-        // Latency color
-        let latencyColor = 'text-[#10b981]';
-        if (l.duration_ms > 100) latencyColor = 'text-amber-400';
-        if (l.duration_ms > 500) latencyColor = 'text-rose-400';
+        let latencyColor = 'text-[#047857]';
+        if (l.duration_ms > 100) latencyColor = 'text-[#b45309]';
+        if (l.duration_ms > 500) latencyColor = 'text-[#b91c1c]';
 
         return `
-          <tr onclick="openLogDetail('${l.id}')" class="hover:bg-[#1a233a] cursor-pointer group transition-colors">
-            <!-- Time -->
-            <td class="py-2.5 px-4 whitespace-nowrap text-slate-400 text-xs">${timeStr}</td>
-
-            <!-- Method -->
-            <td class="py-2.5 px-4 whitespace-nowrap">
-              <span class="px-1.5 py-0.5 rounded text-[10px] font-bold ${methodColor}">${l.method}</span>
+          <tr tabindex="0" role="button" aria-label="Inspect ${escapeHTML(l.method)} request to ${escapeHTML(l.host)}${escapeHTML(l.path)}, status ${l.status_code}" onclick="openLogDetail('${l.id}', this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openLogDetail('${l.id}', this);}" class="hover:bg-[#f4f4f5] cursor-pointer group transition-colors">
+            <td class="py-2.5 px-3.5 whitespace-nowrap text-[#52525b] text-xs">${timeStr}</td>
+            <td class="py-2.5 px-3.5 whitespace-nowrap">
+              <span class="px-1.5 py-0.5 text-[11px] font-bold ${methodColor}">${escapeHTML(l.method)}</span>
             </td>
-
-            <!-- Status Code -->
-            <td class="py-2.5 px-4 whitespace-nowrap">
-              <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold ${statusBadge}">${l.status_code}</span>
+            <td class="py-2.5 px-3.5 whitespace-nowrap font-bold ${statusBadge}">
+              ${l.status_code}
             </td>
-
-            <!-- Domain & Path -->
-            <td class="py-2.5 px-4 whitespace-nowrap">
-              <div class="flex items-center gap-1.5">
-                <span class="text-slate-400">${escapeHTML(l.host)}</span>
-                <span class="text-white font-medium">${escapeHTML(l.path)}</span>
-                ${l.error ? `<span class="text-[10px] text-rose-400 bg-rose-950/50 border border-rose-800/40 px-1.5 py-0.2 rounded font-mono truncate max-w-[200px]" title="${escapeHTML(l.error)}">${escapeHTML(l.error)}</span>` : ''}
+            <td class="py-2.5 px-3.5">
+              <div class="flex flex-col gap-0.5 min-w-0">
+                <div class="flex items-center gap-1.5 truncate">
+                  <span class="text-[#52525b]">${escapeHTML(l.host)}</span>
+                  <span class="text-[#18181b] font-semibold truncate">${escapeHTML(l.path)}</span>
+                  ${l.error ? `<span class="text-[11px] text-[#b91c1c] bg-[#fef2f2] border border-[#dc2626] px-1.5 py-0.2 truncate max-w-[160px]" title="${escapeHTML(l.error)}">${escapeHTML(l.error)}</span>` : ''}
+                </div>
+                <div class="text-[11px] text-[#0369a1] truncate">&rarr; ${escapeHTML(l.target_url)}</div>
               </div>
             </td>
-
-            <!-- Target URL -->
-            <td class="py-2.5 px-4 whitespace-nowrap text-slate-400">
-              <span class="text-[#06b6d4]">${escapeHTML(l.target_url)}</span>
+            <td class="py-2.5 px-3.5 whitespace-nowrap text-right ${latencyColor} font-semibold">
+              ${l.duration_ms} ms
             </td>
-
-            <!-- Latency -->
-            <td class="py-2.5 px-4 whitespace-nowrap ${latencyColor} font-semibold">
-              ${l.duration_ms}ms
-            </td>
-
-            <!-- Client IP -->
-            <td class="py-2.5 px-4 whitespace-nowrap text-slate-400 hidden lg:table-cell text-xs">
-              ${escapeHTML(l.client_ip)}
-            </td>
-
-            <!-- Action Column -->
-            <td class="py-2.5 px-4 whitespace-nowrap text-right">
-              <button onclick="event.stopPropagation(); openLogDetail('${l.id}')" class="px-2 py-0.5 rounded text-[11px] font-mono bg-[#171f33] border border-[#334155] text-cyan-400 group-hover:border-cyan-400 group-hover:bg-[#0f172a] transition inline-flex items-center gap-1 ml-auto">
-                <span>Inspect</span>
-                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            <td class="py-2.5 px-3.5 whitespace-nowrap text-right">
+              <button type="button" tabindex="-1" onclick="event.stopPropagation(); openLogDetail('${l.id}', this)" class="min-h-[30px] px-2 py-0.5 text-[11px] font-mono bg-[#ffffff] border border-[#71717a] text-[#18181b] group-hover:border-[#dc2626] group-hover:text-[#b91c1c] transition">
+                Inspect
               </button>
             </td>
           </tr>
@@ -943,30 +1334,23 @@
       }).join('');
     }
 
-    function openLogDetail(id) {
+    function openLogDetail(id, triggerEl) {
       const entry = logs.find(l => l.id === id);
       if (!entry) return;
       selectedLogEntry = entry;
+      lastFocusedElement = triggerEl || document.activeElement;
 
       const modal = document.getElementById('log-detail-modal');
       document.getElementById('detail-id').textContent = entry.id || '-';
       document.getElementById('detail-method-pill').textContent = entry.method;
-      
-      // Method pill style
-      let methodColor = 'bg-[#0b0f19] text-cyan-400 border border-[#334155]';
-      if (entry.method === 'POST') methodColor = 'bg-blue-950/70 text-blue-400 border border-blue-800/50';
-      else if (entry.method === 'PUT') methodColor = 'bg-amber-950/70 text-amber-400 border border-amber-800/50';
-      else if (entry.method === 'DELETE') methodColor = 'bg-rose-950/70 text-rose-400 border border-rose-800/50';
-      document.getElementById('detail-method-pill').className = `px-2.5 py-1 rounded text-xs font-mono font-bold ${methodColor}`;
 
-      // Status text
       const statusText = getStatusText(entry.status_code);
       const statusEl = document.getElementById('detail-status');
       statusEl.textContent = `${entry.status_code} ${statusText}`;
-      if (entry.status_code < 300) statusEl.className = 'mt-1 text-sm font-bold text-emerald-400';
-      else if (entry.status_code < 400) statusEl.className = 'mt-1 text-sm font-bold text-blue-400';
-      else if (entry.status_code < 500) statusEl.className = 'mt-1 text-sm font-bold text-amber-400';
-      else statusEl.className = 'mt-1 text-sm font-bold text-rose-400';
+      if (entry.status_code < 300) statusEl.className = 'mt-1 text-sm font-bold text-[#047857]';
+      else if (entry.status_code < 400) statusEl.className = 'mt-1 text-sm font-bold text-[#0369a1]';
+      else if (entry.status_code < 500) statusEl.className = 'mt-1 text-sm font-bold text-[#b45309]';
+      else statusEl.className = 'mt-1 text-sm font-bold text-[#b91c1c]';
 
       document.getElementById('detail-duration').textContent = `${entry.duration_ms} ms`;
       document.getElementById('detail-proto').textContent = entry.proto || 'HTTP/1.1';
@@ -982,34 +1366,35 @@
       document.getElementById('detail-timestamp-sub').textContent = entry.timestamp ? new Date(entry.timestamp).toLocaleTimeString() : '-';
       document.getElementById('detail-timestamp-full').textContent = entry.timestamp ? `${new Date(entry.timestamp).toLocaleString()} (${entry.timestamp})` : '-';
 
-      // Error Diagnosis Banner
       const errorBox = document.getElementById('detail-error-box');
       if (entry.error || entry.status_code >= 400) {
         errorBox.classList.remove('hidden');
         document.getElementById('detail-error-msg').textContent = entry.error || `HTTP ${entry.status_code}: ${statusText}`;
-        let hint = 'Check network and upstream server configuration.';
+        let hint = 'Verify upstream service configuration and network reachability.';
         if (entry.status_code === 502) {
-          hint = `Could not connect to ${entry.target_url}. Please ensure your local server or development process is running and actively listening on that port.`;
+          hint = `Could not connect to ${entry.target_url}. Ensure your local development server is running and listening on that port.`;
         } else if (entry.status_code === 404) {
-          hint = `Domain ${entry.host} is not registered in Reverse.Local. Add it to Routes above to route traffic.`;
+          hint = `Domain ${entry.host} is not registered in Reverse.Local. Bind the domain in the left pane to forward traffic.`;
         } else if (entry.status_code === 503) {
-          hint = `Route for ${entry.host} is currently disabled. Toggle it active in the Routes table.`;
+          hint = `Route for ${entry.host} is currently paused. Enable its toggle in the Domain Routing Matrix.`;
         }
         document.getElementById('detail-error-hint').textContent = hint;
       } else {
         errorBox.classList.add('hidden');
       }
 
-      // cURL command
       const curlCmd = `curl -k -i -X ${entry.method} "${incomingURL}"`;
       document.getElementById('detail-curl-command').textContent = curlCmd;
 
       modal.classList.remove('hidden');
+      const closeBtn = modal.querySelector('button[aria-label="Close request inspector dialog"]');
+      if (closeBtn) closeBtn.focus();
     }
 
     function closeLogDetailModal() {
       document.getElementById('log-detail-modal').classList.add('hidden');
       selectedLogEntry = null;
+      restoreFocus();
     }
 
     function copyDetailCurl() {
@@ -1018,13 +1403,13 @@
       navigator.clipboard.writeText(curlCmd).then(() => {
         showToast('cURL command copied to clipboard', 'success');
       }).catch(() => {
-        showToast('Failed to copy command', 'error');
+        showToast('Failed to copy cURL command', 'error');
       });
     }
 
     function exportLogsJSON() {
       if (logs.length === 0) {
-        showToast('No logs to export', 'info');
+        showToast('No access logs available to export', 'info');
         return;
       }
       const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(logs, null, 2));
@@ -1035,15 +1420,15 @@
       document.body.appendChild(downloadAnchor);
       downloadAnchor.click();
       downloadAnchor.remove();
-      showToast(`Exported ${logs.length} access logs to ${filename}`, 'success');
+      showToast(`Exported ${logs.length} log entries to ${filename}`, 'success');
     }
 
     function formatBytes(bytes) {
-      if (!bytes || bytes <= 0) return '0 B';
-      const k = 1024;
-      const sizes = ['B', 'KB', 'MB', 'GB'];
-      const i = Math.floor(Math.log(bytes) / Math.log(k));
-      return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+      const b = Number(bytes) || 0;
+      if (b <= 0) return '0 B';
+      if (b < 1024) return `${b} B`;
+      if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
+      return `${(b / (1024 * 1024)).toFixed(2)} MB`;
     }
 
     function getStatusText(code) {
@@ -1063,19 +1448,21 @@
       }[tag] || tag));
     }
 
-    // -------------------------------------------------------------
-    // ROUTES & CONFIG MANAGEMENT
-    // -------------------------------------------------------------
     function setFilter(filter) {
       currentFilter = filter;
       document.querySelectorAll('#tab-all, #tab-active, #tab-inactive').forEach(el => {
-        el.className = 'px-3 py-1 text-slate-400 hover:text-white font-mono text-xs rounded transition-colors';
+        el.className = 'min-h-[36px] sm:min-h-[26px] px-2.5 py-0.5 text-[#52525b] hover:text-[#18181b] font-mono text-xs transition-colors';
       });
       const activeTab = document.getElementById(`tab-${filter}`);
       if (activeTab) {
-        activeTab.className = 'px-3 py-1 bg-[#1e293b] text-[#10b981] font-mono text-xs font-semibold rounded';
+        activeTab.className = 'min-h-[36px] sm:min-h-[26px] px-2.5 py-0.5 bg-[#dc2626] text-[#ffffff] font-mono text-xs font-bold';
       }
       renderRoutes();
+    }
+
+    function resetRouteFilters() {
+      document.getElementById('search-input').value = '';
+      setFilter('all');
     }
 
     async function fetchStatus() {
@@ -1085,20 +1472,66 @@
         const data = await res.json();
 
         const caText = document.getElementById('ca-status-text');
+        const caDot = document.getElementById('ca-status-dot');
+        const caPill = document.getElementById('ca-status-pill');
         const btnInstallCA = document.getElementById('btn-install-ca');
 
         if (data.ca_installed) {
-          caText.textContent = 'Active (Trusted)';
-          caText.className = 'text-[#06b6d4] font-medium';
+          caText.textContent = 'Trusted in OS';
+          caText.className = 'text-[#047857] font-semibold';
+          caDot.className = 'w-2 h-2 rounded-full bg-[#047857]';
+          if (caPill) {
+            caPill.textContent = 'CA Trusted';
+            caPill.className = 'px-2 py-0.5 bg-[#ecfdf5] border border-[#047857] text-[#047857] font-semibold text-[11px]';
+          }
           btnInstallCA.classList.add('hidden');
         } else {
           caText.textContent = 'Untrusted';
-          caText.className = 'text-amber-400 font-medium';
+          caText.className = 'text-[#b91c1c] font-semibold';
+          caDot.className = 'w-2 h-2 rounded-full bg-[#dc2626]';
+          if (caPill) {
+            caPill.textContent = 'Action Needed';
+            caPill.className = 'px-2 py-0.5 bg-[#fef2f2] border border-[#dc2626] text-[#b91c1c] font-semibold text-[11px]';
+          }
           btnInstallCA.classList.remove('hidden');
         }
 
-        document.getElementById('stat-total-count').textContent = `${data.total_routes} registered`;
+        if (data.http_port && data.https_port) {
+          const portsLabel = document.getElementById('header-ports-label');
+          if (portsLabel) portsLabel.textContent = `HTTP :${data.http_port} -> HTTPS :${data.https_port}`;
+        }
+
+        if (data.os) {
+          const osBadge = document.getElementById('runtime-os-badge');
+          if (osBadge) osBadge.textContent = `${data.os}`;
+          const hostsLabel = document.getElementById('hosts-path-label');
+          if (hostsLabel) {
+            hostsLabel.textContent = data.os === 'windows' ? 'System32\\drivers\\etc\\hosts' : '/etc/hosts';
+          }
+        }
+
+        document.getElementById('stat-total-count').textContent = data.total_routes;
         document.getElementById('stat-active-count').textContent = data.active_routes;
+
+        const lanIP = data.lan_ip || '127.0.0.1';
+        const lanLabel = document.getElementById('header-lan-label');
+        if (lanLabel) {
+          lanLabel.textContent = data.lan_broadcast_active
+            ? `${lanIP} (mDNS + DNS)`
+            : `${lanIP} (Local Only)`;
+          lanLabel.className = data.lan_broadcast_active
+            ? 'text-[#047857] hover:underline font-semibold'
+            : 'text-[#52525b] hover:underline font-semibold';
+        }
+        const docsLanIP = document.getElementById('docs-lan-ip');
+        if (docsLanIP) docsLanIP.textContent = lanIP;
+        document.querySelectorAll('.docs-lan-ip-inline').forEach(el => {
+          el.textContent = lanIP;
+        });
+        const docsConfigDir = document.getElementById('docs-config-dir');
+        if (docsConfigDir && data.config_dir) {
+          docsConfigDir.textContent = data.config_dir;
+        }
       } catch (err) {
         console.warn('Status fetch error:', err);
       }
@@ -1106,14 +1539,30 @@
 
     async function fetchRoutes() {
       const spinner = document.getElementById('refresh-spinner');
+      const loadingEl = document.getElementById('routes-loading-state');
+      const errorEl = document.getElementById('routes-error-state');
+
       spinner.classList.add('animate-spin');
+      if (!routesLoadedOnce) {
+        loadingEl.classList.remove('hidden');
+      }
+      errorEl.classList.add('hidden');
+
       try {
         const res = await fetch('/api/routes');
-        if (!res.ok) throw new Error('Failed to load routes');
+        if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to load configured routes`);
         routes = await res.json();
+        routesLoadedOnce = true;
+        loadingEl.classList.add('hidden');
         renderRoutes();
         updatePortsList();
       } catch (err) {
+        loadingEl.classList.add('hidden');
+        document.getElementById('routes-table-wrapper').classList.add('hidden');
+        document.getElementById('empty-state').classList.add('hidden');
+        document.getElementById('routes-filtered-empty-state').classList.add('hidden');
+        document.getElementById('routes-error-message').textContent = err.message || 'Could not load routes from the local daemon.';
+        errorEl.classList.remove('hidden');
         showToast(err.message, 'error');
       } finally {
         setTimeout(() => spinner.classList.remove('animate-spin'), 350);
@@ -1125,6 +1574,9 @@
         const res = await fetch('/api/routes');
         if (!res.ok) return;
         routes = await res.json();
+        routesLoadedOnce = true;
+        document.getElementById('routes-loading-state').classList.add('hidden');
+        document.getElementById('routes-error-state').classList.add('hidden');
         renderRoutes();
         updatePortsList();
       } catch (e) {}
@@ -1160,87 +1612,76 @@
         filtered = filtered.filter(r => !r.active);
       }
 
+      const wrapper = document.getElementById('routes-table-wrapper');
       const tbody = document.getElementById('routes-table-body');
       const emptyState = document.getElementById('empty-state');
+      const filteredEmptyState = document.getElementById('routes-filtered-empty-state');
+
       document.getElementById('stat-active-count').textContent = activeCount;
-      document.getElementById('stat-total-count').textContent = `${routes.length} registered`;
+      document.getElementById('stat-total-count').textContent = routes.length;
       document.getElementById('table-showing-count').textContent = filtered.length;
 
-      if (filtered.length === 0) {
+      if (routes.length === 0) {
         tbody.innerHTML = '';
+        wrapper.classList.add('hidden');
+        filteredEmptyState.classList.add('hidden');
         emptyState.classList.remove('hidden');
         return;
       }
 
-      emptyState.classList.add('hidden');
-      tbody.innerHTML = filtered.map(r => {
-        const dateStr = r.created_at ? new Date(r.created_at).toLocaleDateString(undefined, {
-          month: 'short', day: 'numeric', year: 'numeric'
-        }) : '-';
+      if (filtered.length === 0) {
+        tbody.innerHTML = '';
+        wrapper.classList.add('hidden');
+        emptyState.classList.add('hidden');
+        filteredEmptyState.classList.remove('hidden');
+        return;
+      }
 
+      emptyState.classList.add('hidden');
+      filteredEmptyState.classList.add('hidden');
+      wrapper.classList.remove('hidden');
+
+      tbody.innerHTML = filtered.map(r => {
         return `
-          <tr class="hover:bg-[#171f33] transition-colors group ${!r.active ? 'opacity-60' : ''}">
-            <!-- Active Toggle -->
-            <td class="py-3 px-4 whitespace-nowrap">
-              <label class="relative inline-flex items-center cursor-pointer">
-                <input type="checkbox" onchange="toggleRoute('${r.id}')" ${r.active ? 'checked' : ''} class="sr-only peer" aria-label="Toggle active status for ${r.domain}">
-                <div class="w-8 h-4 bg-[#1e293b] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-[#10b981]"></div>
+          <tr class="hover:bg-[#f4f4f5] transition-colors group">
+            <td class="py-3 px-4 whitespace-nowrap align-top">
+              <label class="relative inline-flex items-center gap-2 cursor-pointer py-1">
+                <input type="checkbox" onchange="toggleRoute('${r.id}')" ${r.active ? 'checked' : ''} class="w-4 h-4 accent-[#dc2626] cursor-pointer" aria-label="Toggle active routing for ${escapeHTML(r.domain)}">
               </label>
             </td>
 
-            <!-- Domain with HTTPS link -->
-            <td class="py-3 px-4 whitespace-nowrap font-mono font-medium">
-              <div class="flex items-center gap-2">
-                <svg class="w-3.5 h-3.5 text-[#10b981]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
-                </svg>
-                <a href="https://${r.domain}" target="_blank" rel="noopener noreferrer" class="text-white hover:text-[#10b981] transition flex items-center gap-1.5 group">
-                  <span>https://${r.domain}</span>
-                  <svg class="w-3.5 h-3.5 text-slate-500 group-hover:text-[#10b981] transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
-                  </svg>
-                </a>
-                ${!r.active ? '<span class="text-[10px] font-sans font-semibold px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">Inactive</span>' : ''}
+            <td class="py-3 px-4 font-mono">
+              <div class="flex flex-col gap-1">
+                <div class="flex flex-wrap items-center gap-2">
+                  <a href="https://${escapeHTML(r.domain)}" target="_blank" rel="noopener noreferrer" class="text-[#18181b] font-bold hover:text-[#dc2626] transition inline-flex items-center gap-1">
+                    <span>https://${escapeHTML(r.domain)}</span>
+                    <svg class="w-3 h-3 text-[#52525b]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                    </svg>
+                  </a>
+                  <span class="px-1.5 py-0.2 text-[10px] font-bold border ${r.active ? 'bg-[#ecfdf5] text-[#047857] border-[#047857]' : 'bg-[#fffbeb] text-[#b45309] border-[#b45309]'}">
+                    ${r.active ? 'TLS ACTIVE' : 'PAUSED'}
+                  </span>
+                </div>
+                <div class="flex items-center gap-2 text-[11px] text-[#52525b]">
+                  <span>&rarr;</span>
+                  <span class="text-[#0369a1] font-medium select-all">${escapeHTML(r.target_url)}</span>
+                  <button type="button" onclick="copyToClipboard('${escapeHTML(r.target_url)}')" aria-label="Copy upstream URL ${escapeHTML(r.target_url)}" title="Copy upstream URL" class="px-1.5 py-0.2 bg-[#ffffff] border border-[#71717a] hover:border-[#18181b] text-[#52525b] hover:text-[#18181b] text-[10px] transition">
+                    Copy
+                  </button>
+                </div>
               </div>
             </td>
 
-            <!-- Target URL with Copy -->
-            <td class="py-3 px-4 whitespace-nowrap font-mono">
-              <span class="inline-flex items-center gap-2 px-2.5 py-1 bg-[#0b0f19] border border-[#334155] rounded text-slate-200">
-                <span class="text-[#06b6d4] select-all">${r.target_url}</span>
-                <button onclick="copyToClipboard('${r.target_url}')" title="Copy target URL" class="text-slate-400 hover:text-white transition">
-                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
-                  </svg>
-                </button>
-              </span>
-            </td>
-
-            <!-- SSL Certificate Status -->
-            <td class="py-3 px-4 whitespace-nowrap">
-              <div class="flex items-center gap-2">
-                <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-[#171f33] text-[#10b981] border border-[#334155]">
-                  Valid (Local CA)
-                </span>
-                <span class="text-slate-400 text-xs">Auto-renew 365d</span>
-              </div>
-            </td>
-
-            <!-- Created Date -->
-            <td class="py-3 px-4 whitespace-nowrap text-slate-400 text-xs hidden md:table-cell">
-              ${dateStr}
-            </td>
-
-            <!-- Actions -->
-            <td class="py-3 px-4 whitespace-nowrap text-right">
+            <td class="py-3 px-4 whitespace-nowrap text-right align-top">
               <div class="flex items-center justify-end gap-1.5">
-                <button onclick="openEditModal('${r.id}')" title="Edit Route" class="p-1.5 text-slate-400 hover:text-white hover:bg-[#1e293b] rounded transition">
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <button type="button" onclick="openEditModal('${r.id}', this)" aria-label="Edit route ${escapeHTML(r.domain)}" title="Edit route" class="min-h-[38px] min-w-[38px] sm:min-h-[30px] sm:min-w-[30px] px-2 text-[#18181b] bg-[#ffffff] hover:bg-[#f4f4f5] border border-[#71717a] hover:border-[#18181b] inline-flex items-center justify-center transition">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path>
                   </svg>
                 </button>
-                <button onclick="promptDelete('${r.id}', '${r.domain}')" title="Delete Route" class="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded transition">
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <button type="button" onclick="promptDelete('${r.id}', '${escapeHTML(r.domain)}', this)" aria-label="Delete route ${escapeHTML(r.domain)}" title="Delete route" class="min-h-[38px] min-w-[38px] sm:min-h-[30px] sm:min-w-[30px] px-2 text-[#18181b] hover:text-[#b91c1c] bg-[#ffffff] hover:bg-[#fef2f2] border border-[#71717a] hover:border-[#dc2626] inline-flex items-center justify-center transition">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
                   </svg>
                 </button>
@@ -1251,52 +1692,147 @@
       }).join('');
     }
 
+    function appendQuickSuffix(suffix) {
+      const input = document.getElementById('quick-domain');
+      let val = input.value.trim().replace(/\.(local|test|dev|internal)$/, '');
+      input.value = val ? val + suffix : 'app' + suffix;
+      input.focus();
+    }
+
+    function setQuickTarget(target) {
+      const input = document.getElementById('quick-target');
+      input.value = target;
+      input.focus();
+    }
+
+    async function handleQuickAddSubmit(e) {
+      e.preventDefault();
+      const domainInput = document.getElementById('quick-domain');
+      const targetInput = document.getElementById('quick-target');
+      const errorEl = document.getElementById('quick-form-error');
+      const btn = document.getElementById('btn-quick-bind');
+
+      const domain = domainInput.value.trim();
+      let target_url = targetInput.value.trim();
+
+      domainInput.removeAttribute('aria-invalid');
+      targetInput.removeAttribute('aria-invalid');
+      errorEl.classList.add('hidden');
+
+      if (!domain) {
+        domainInput.setAttribute('aria-invalid', 'true');
+        errorEl.textContent = 'Enter a local domain name (for example, api.local).';
+        errorEl.classList.remove('hidden');
+        domainInput.focus();
+        return;
+      }
+
+      if (!target_url) {
+        targetInput.setAttribute('aria-invalid', 'true');
+        errorEl.textContent = 'Enter an upstream target address (for example, http://127.0.0.1:3000).';
+        errorEl.classList.remove('hidden');
+        targetInput.focus();
+        return;
+      }
+
+      if (!target_url.startsWith('http://') && !target_url.startsWith('https://')) {
+        target_url = 'http://' + target_url;
+      }
+
+      btn.disabled = true;
+      btn.textContent = '...';
+
+      try {
+        const res = await fetch('/api/routes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ domain, target_url })
+        });
+
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.message || 'Failed to bind domain route');
+        }
+
+        domainInput.value = '';
+        targetInput.value = '';
+        await fetchRoutes();
+        fetchStatus();
+        showToast(`Bound https://${domain} -> ${target_url}`, 'success');
+      } catch (err) {
+        errorEl.textContent = err.message;
+        errorEl.classList.remove('hidden');
+        domainInput.setAttribute('aria-invalid', 'true');
+        domainInput.focus();
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Bind';
+      }
+    }
+
     async function toggleRoute(id) {
       try {
         const res = await fetch(`/api/routes/${id}/toggle`, { method: 'POST' });
         if (!res.ok) {
           const err = await res.json();
-          throw new Error(err.message || 'Failed to toggle route');
+          throw new Error(err.message || 'Failed to toggle route state');
         }
         const updated = await res.json();
         const idx = routes.findIndex(r => r.id === id);
         if (idx !== -1) routes[idx] = updated;
         renderRoutes();
-        showToast(`${updated.domain} is now ${updated.active ? 'active' : 'inactive'}`, 'success');
+        fetchStatus();
+        showToast(`${updated.domain} is now ${updated.active ? 'active' : 'paused'}`, 'success');
       } catch (err) {
         showToast(err.message, 'error');
         fetchRoutes();
       }
     }
 
-    function openAddModal() {
-      document.getElementById('modal-title').textContent = 'Configure Reverse Proxy Route';
+    function clearFormValidationState() {
+      const domainInput = document.getElementById('form-domain');
+      const targetInput = document.getElementById('form-target');
+      const errorEl = document.getElementById('form-error');
+      domainInput.removeAttribute('aria-invalid');
+      targetInput.removeAttribute('aria-invalid');
+      errorEl.classList.add('hidden');
+      errorEl.textContent = '';
+    }
+
+    function openAddModal(triggerEl) {
+      lastFocusedElement = triggerEl || document.activeElement;
+      document.getElementById('modal-title').textContent = 'Add Domain Route';
+      document.getElementById('btn-save-route').textContent = 'Save Route';
       document.getElementById('form-id').value = '';
       document.getElementById('form-domain').value = '';
       document.getElementById('form-target').value = '';
       document.getElementById('form-active').checked = true;
-      document.getElementById('form-error').classList.add('hidden');
+      clearFormValidationState();
       updatePreview();
       document.getElementById('modal').classList.remove('hidden');
       document.getElementById('form-domain').focus();
     }
 
-    function openEditModal(id) {
+    function openEditModal(id, triggerEl) {
       const r = routes.find(item => item.id === id);
       if (!r) return;
+      lastFocusedElement = triggerEl || document.activeElement;
 
-      document.getElementById('modal-title').textContent = 'Edit Route Configuration';
+      document.getElementById('modal-title').textContent = 'Edit Domain Route';
+      document.getElementById('btn-save-route').textContent = 'Save Changes';
       document.getElementById('form-id').value = r.id;
       document.getElementById('form-domain').value = r.domain;
       document.getElementById('form-target').value = r.target_url;
       document.getElementById('form-active').checked = r.active;
-      document.getElementById('form-error').classList.add('hidden');
+      clearFormValidationState();
       updatePreview();
       document.getElementById('modal').classList.remove('hidden');
+      document.getElementById('form-domain').focus();
     }
 
     function closeModal() {
       document.getElementById('modal').classList.add('hidden');
+      restoreFocus();
     }
 
     function appendSuffix(suffix) {
@@ -1304,11 +1840,14 @@
       let val = input.value.trim().replace(/\.(local|test|dev|internal)$/, '');
       input.value = val ? val + suffix : 'app' + suffix;
       updatePreview();
+      input.focus();
     }
 
     function setTargetPreset(target) {
-      document.getElementById('form-target').value = target;
+      const input = document.getElementById('form-target');
+      input.value = target;
       updatePreview();
+      input.focus();
     }
 
     function updatePreview() {
@@ -1324,12 +1863,30 @@
     async function handleFormSubmit(e) {
       e.preventDefault();
       const id = document.getElementById('form-id').value;
-      const domain = document.getElementById('form-domain').value.trim();
-      const target_url = document.getElementById('form-target').value.trim();
+      const domainInput = document.getElementById('form-domain');
+      const targetInput = document.getElementById('form-target');
+      const domain = domainInput.value.trim();
+      const target_url = targetInput.value.trim();
       const active = document.getElementById('form-active').checked;
       const errorEl = document.getElementById('form-error');
 
-      errorEl.classList.add('hidden');
+      clearFormValidationState();
+
+      if (!domain) {
+        domainInput.setAttribute('aria-invalid', 'true');
+        errorEl.textContent = 'Enter a local domain name (for example, myapp.local).';
+        errorEl.classList.remove('hidden');
+        domainInput.focus();
+        return;
+      }
+
+      if (!target_url) {
+        targetInput.setAttribute('aria-invalid', 'true');
+        errorEl.textContent = 'Enter an upstream target address (for example, http://127.0.0.1:3000).';
+        errorEl.classList.remove('hidden');
+        targetInput.focus();
+        return;
+      }
 
       const btn = document.getElementById('btn-save-route');
       const originalText = btn.textContent;
@@ -1359,25 +1916,37 @@
 
         closeModal();
         await fetchRoutes();
-        showToast(id ? 'Route updated successfully' : 'Domain added to hosts & proxy', 'success');
+        fetchStatus();
+        showToast(id ? `Saved changes to ${domain}` : `Added route https://${domain}`, 'success');
       } catch (err) {
         errorEl.textContent = err.message;
         errorEl.classList.remove('hidden');
+        if (err.message.toLowerCase().includes('target')) {
+          targetInput.setAttribute('aria-invalid', 'true');
+          targetInput.focus();
+        } else {
+          domainInput.setAttribute('aria-invalid', 'true');
+          domainInput.focus();
+        }
       } finally {
         btn.textContent = originalText;
         btn.disabled = false;
       }
     }
 
-    function promptDelete(id, domain) {
+    function promptDelete(id, domain, triggerEl) {
+      lastFocusedElement = triggerEl || document.activeElement;
       routeToDeleteId = id;
       document.getElementById('delete-domain-name').textContent = domain;
-      document.getElementById('delete-modal').classList.remove('hidden');
+      const modal = document.getElementById('delete-modal');
+      modal.classList.remove('hidden');
+      document.getElementById('btn-confirm-delete').focus();
     }
 
     function closeDeleteModal() {
       routeToDeleteId = null;
       document.getElementById('delete-modal').classList.add('hidden');
+      restoreFocus();
     }
 
     async function executeDelete() {
@@ -1394,12 +1963,13 @@
         }
         closeDeleteModal();
         await fetchRoutes();
-        showToast('Route removed from hosts and proxy', 'success');
+        fetchStatus();
+        showToast('Route deleted from hosts and proxy', 'success');
       } catch (err) {
         showToast(err.message, 'error');
       } finally {
         btn.disabled = false;
-        btn.textContent = 'Delete';
+        btn.textContent = 'Delete Route';
       }
     }
 
@@ -1411,14 +1981,455 @@
       try {
         const res = await fetch('/api/ca/install', { method: 'POST' });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.message || 'Installation failed');
-        showToast(data.message || 'Root CA installed successfully', 'success');
+        if (!res.ok) throw new Error(data.message || 'Root CA installation failed');
+        showToast(data.message || 'Root CA trusted in OS certificate store', 'success');
         fetchStatus();
       } catch (err) {
         showToast(err.message, 'error');
       } finally {
         btn.disabled = false;
-        btn.textContent = 'Install CA';
+        btn.textContent = 'Trust CA';
+      }
+    }
+
+    async function openDesktopControlPanel(btn) {
+      if (btn) btn.disabled = true;
+      try {
+        const res = await fetch('/api/system/action', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'open_control_panel' })
+        });
+        if (res.ok) {
+          showToast('Opened fixed Desktop Control Panel window', 'info');
+          return;
+        }
+      } catch (e) {} finally {
+        if (btn) btn.disabled = false;
+      }
+      window.open('/control', 'ReverseLocalControl', 'width=480,height=660,resizable=no,menubar=no,toolbar=no,location=no,status=no');
+    }
+
+    async function fetchTunnels() {
+      const loadingEl = document.getElementById('tunnels-loading-state');
+      const errorEl = document.getElementById('tunnels-error-state');
+      if (!tunnelsLoadedOnce) {
+        loadingEl.classList.remove('hidden');
+      }
+      errorEl.classList.add('hidden');
+
+      try {
+        const res = await fetch('/api/tunnels');
+        if (!res.ok) throw new Error('Failed to load SSH tunnel profiles');
+        tunnels = await res.json();
+        tunnelsLoadedOnce = true;
+        loadingEl.classList.add('hidden');
+        renderTunnels();
+      } catch (err) {
+        loadingEl.classList.add('hidden');
+        document.getElementById('tunnels-list-wrapper').classList.add('hidden');
+        document.getElementById('tunnels-empty-state').classList.add('hidden');
+        document.getElementById('tunnels-error-message').textContent = err.message || 'Could not load SSH tunnels.';
+        errorEl.classList.remove('hidden');
+      }
+    }
+
+    async function fetchTunnelsQuiet() {
+      try {
+        const res = await fetch('/api/tunnels');
+        if (!res.ok) return;
+        tunnels = await res.json();
+        tunnelsLoadedOnce = true;
+        document.getElementById('tunnels-loading-state').classList.add('hidden');
+        document.getElementById('tunnels-error-state').classList.add('hidden');
+        renderTunnels();
+      } catch (e) {}
+    }
+
+    function renderTunnels() {
+      const listEl = document.getElementById('tunnels-list-wrapper');
+      const emptyEl = document.getElementById('tunnels-empty-state');
+      const badgeEl = document.getElementById('tunnels-count-badge');
+
+      const connectedCount = tunnels.filter(t => t.status === 'connected').length;
+      if (badgeEl) {
+        badgeEl.textContent = `${connectedCount} / ${tunnels.length}`;
+      }
+
+      if (tunnels.length === 0) {
+        listEl.innerHTML = '';
+        listEl.classList.add('hidden');
+        emptyEl.classList.remove('hidden');
+        return;
+      }
+
+      emptyEl.classList.add('hidden');
+      listEl.classList.remove('hidden');
+
+      listEl.innerHTML = tunnels.map(t => {
+        const isConnected = t.status === 'connected';
+        const isConnecting = t.status === 'connecting' || t.status === 'reconnecting';
+        let badgeClass = 'bg-[#f4f4f5] border-[#71717a] text-[#52525b]';
+        let badgeLabel = 'STOPPED';
+
+        if (isConnected) {
+          badgeClass = 'bg-[#ecfdf5] border-[#047857] text-[#047857]';
+          badgeLabel = 'CONNECTED';
+        } else if (isConnecting) {
+          badgeClass = 'bg-[#fffbeb] border-[#b45309] text-[#b45309]';
+          badgeLabel = t.status.toUpperCase();
+        } else if (t.status === 'error') {
+          badgeClass = 'bg-[#fef2f2] border-[#dc2626] text-[#b91c1c]';
+          badgeLabel = 'ERROR';
+        }
+
+        return `
+          <div class="p-3.5 sm:px-5 hover:bg-[#f4f4f5] transition-colors space-y-2">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <div class="flex items-center gap-2 min-w-0">
+                <span class="font-bold text-[#18181b] truncate">${escapeHTML(t.name)}</span>
+                <span class="px-1.5 py-0.5 text-[10px] border font-bold ${badgeClass}">${badgeLabel}</span>
+                <span class="text-[11px] text-[#52525b] uppercase">[${escapeHTML(t.auth_type)}]</span>
+              </div>
+
+              <div class="flex items-center gap-1.5">
+                <button type="button" onclick="toggleTunnelConnection('${t.id}', this)" class="min-h-[30px] px-2.5 py-0.5 border text-[11px] font-bold uppercase transition ${
+                  isConnected || isConnecting
+                    ? 'bg-[#fef2f2] border-[#dc2626] text-[#b91c1c] hover:bg-[#dc2626] hover:text-[#ffffff]'
+                    : 'bg-[#ecfdf5] border-[#047857] text-[#047857] hover:bg-[#047857] hover:text-[#ffffff]'
+                }">
+                  ${isConnected || isConnecting ? 'Disconnect' : 'Connect'}
+                </button>
+                <button type="button" onclick="bindTunnelToDomain(${t.local_port}, '${escapeHTML(t.name)}')" title="Bind local forwarded port to an HTTPS domain" class="min-h-[30px] px-2 py-0.5 bg-[#dc2626] hover:bg-[#b91c1c] text-[#ffffff] text-[11px] font-bold transition">
+                  Bind Domain
+                </button>
+                <button type="button" onclick="openEditTunnelModal('${t.id}', this)" aria-label="Edit SSH tunnel ${escapeHTML(t.name)}" class="min-h-[30px] px-2 py-0.5 bg-[#ffffff] border border-[#71717a] hover:border-[#18181b] text-[#18181b] text-[11px] transition">
+                  Edit
+                </button>
+                <button type="button" onclick="deleteTunnel('${t.id}', '${escapeHTML(t.name)}')" aria-label="Delete SSH tunnel ${escapeHTML(t.name)}" class="min-h-[30px] px-2 py-0.5 bg-[#ffffff] border border-[#71717a] hover:border-[#dc2626] text-[#52525b] hover:text-[#b91c1c] text-[11px] transition">
+                  Del
+                </button>
+              </div>
+            </div>
+
+            <div class="flex flex-wrap items-center justify-between gap-2 text-[11px] tabular-nums">
+              <div class="flex flex-wrap items-center gap-1.5">
+                <span class="text-[#b91c1c] font-bold">${escapeHTML(t.local_addr || '127.0.0.1')}:${t.local_port}</span>
+                <span class="text-[#52525b]">&rarr;</span>
+                <span class="text-[#0369a1] font-semibold">${escapeHTML(t.remote_host)}:${t.remote_port}</span>
+                <span class="text-[#52525b]">via ${escapeHTML(t.ssh_user)}@${escapeHTML(t.ssh_host)}:${t.ssh_port}</span>
+              </div>
+              <div class="text-[#52525b]">
+                Streams: <strong class="text-[#18181b]">${t.active_conns || 0}</strong> &middot;
+                RX: <strong class="text-[#047857]">${formatBytes(t.bytes_in)}</strong> &middot;
+                TX: <strong class="text-[#0369a1]">${formatBytes(t.bytes_out)}</strong>
+              </div>
+            </div>
+
+            <div class="flex items-center justify-between gap-2 bg-[#f4f4f5] border border-[#e4e4e7] px-2.5 py-1 text-[11px] text-[#52525b]">
+              <code class="truncate select-all text-[#18181b]">${escapeHTML(t.command_equivalent)}</code>
+              <button type="button" onclick="copyToClipboard('${escapeHTML(t.command_equivalent)}')" class="text-[#b91c1c] font-semibold hover:underline shrink-0">Copy</button>
+            </div>
+
+            ${t.last_error ? `<div class="px-2.5 py-1.5 bg-[#fef2f2] border border-[#dc2626] text-[#b91c1c] text-[11px] break-words">${escapeHTML(t.last_error)}</div>` : ''}
+          </div>
+        `;
+      }).join('');
+    }
+
+    function bindTunnelToDomain(localPort, label) {
+      const slug = (label || 'tunnel').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'tunnel';
+      const domainInput = document.getElementById('quick-domain');
+      const targetInput = document.getElementById('quick-target');
+      domainInput.value = `${slug}.local`;
+      targetInput.value = `http://127.0.0.1:${localPort}`;
+      domainInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      domainInput.focus();
+      showToast(`Pre-filled Quick-Bind for 127.0.0.1:${localPort}`, 'info');
+    }
+
+    function syncTunnelAuthFields() {
+      const authType = document.getElementById('tunnel-auth-type').value;
+      const keyGroup = document.getElementById('tunnel-key-path-group');
+      const secretLabel = document.getElementById('tunnel-secret-label');
+
+      if (authType === 'password') {
+        keyGroup.classList.add('opacity-50');
+        secretLabel.textContent = 'SSH Password';
+      } else {
+        keyGroup.classList.remove('opacity-50');
+        secretLabel.textContent = 'Private Key Passphrase (Optional)';
+      }
+    }
+
+    function openAddTunnelModal(triggerEl) {
+      lastFocusedElement = triggerEl || document.activeElement;
+      document.getElementById('tunnel-modal-title').textContent = 'New SSH Port Forward (-L -N)';
+      document.getElementById('btn-save-tunnel').textContent = 'Save Profile';
+      document.getElementById('tunnel-id').value = '';
+      document.getElementById('tunnel-name').value = '';
+      document.getElementById('tunnel-user').value = 'root';
+      document.getElementById('tunnel-host').value = '';
+      document.getElementById('tunnel-ssh-port').value = '22';
+      document.getElementById('tunnel-local-port').value = '';
+      document.getElementById('tunnel-remote-host').value = '127.0.0.1';
+      document.getElementById('tunnel-remote-port').value = '';
+      document.getElementById('tunnel-auth-type').value = 'key';
+      document.getElementById('tunnel-key-path').value = '~/.ssh/id_ed25519';
+      document.getElementById('tunnel-secret').value = '';
+      document.getElementById('tunnel-save-secret').checked = true;
+      document.getElementById('tunnel-auto-connect').checked = false;
+      document.getElementById('tunnel-form-error').classList.add('hidden');
+      syncTunnelAuthFields();
+      document.getElementById('tunnel-modal').classList.remove('hidden');
+      document.getElementById('tunnel-name').focus();
+    }
+
+    function openEditTunnelModal(id, triggerEl) {
+      const t = tunnels.find(item => item.id === id);
+      if (!t) return;
+      lastFocusedElement = triggerEl || document.activeElement;
+      document.getElementById('tunnel-modal-title').textContent = 'Edit SSH Port Forward (-L -N)';
+      document.getElementById('btn-save-tunnel').textContent = 'Save Changes';
+      document.getElementById('tunnel-id').value = t.id;
+      document.getElementById('tunnel-name').value = t.name;
+      document.getElementById('tunnel-user').value = t.ssh_user;
+      document.getElementById('tunnel-host').value = t.ssh_host;
+      document.getElementById('tunnel-ssh-port').value = t.ssh_port || 22;
+      document.getElementById('tunnel-local-port').value = t.local_port;
+      document.getElementById('tunnel-remote-host').value = t.remote_host || '127.0.0.1';
+      document.getElementById('tunnel-remote-port').value = t.remote_port;
+      document.getElementById('tunnel-auth-type').value = t.auth_type || 'key';
+      document.getElementById('tunnel-key-path').value = t.private_key_path || '~/.ssh/id_ed25519';
+      document.getElementById('tunnel-secret').value = '';
+      document.getElementById('tunnel-secret').placeholder = t.has_saved_secret ? 'Saved in config (leave blank to keep)' : 'Leave blank or enter secret';
+      document.getElementById('tunnel-save-secret').checked = Boolean(t.save_secret);
+      document.getElementById('tunnel-auto-connect').checked = Boolean(t.auto_connect);
+      document.getElementById('tunnel-form-error').classList.add('hidden');
+      syncTunnelAuthFields();
+      document.getElementById('tunnel-modal').classList.remove('hidden');
+      document.getElementById('tunnel-name').focus();
+    }
+
+    function closeTunnelModal() {
+      document.getElementById('tunnel-modal').classList.add('hidden');
+      restoreFocus();
+    }
+
+    async function handleTunnelFormSubmit(e) {
+      e.preventDefault();
+      const id = document.getElementById('tunnel-id').value;
+      const errEl = document.getElementById('tunnel-form-error');
+      const btn = document.getElementById('btn-save-tunnel');
+      errEl.classList.add('hidden');
+
+      const payload = {
+        name: document.getElementById('tunnel-name').value.trim(),
+        ssh_user: document.getElementById('tunnel-user').value.trim(),
+        ssh_host: document.getElementById('tunnel-host').value.trim(),
+        ssh_port: parseInt(document.getElementById('tunnel-ssh-port').value, 10) || 22,
+        local_addr: '127.0.0.1',
+        local_port: parseInt(document.getElementById('tunnel-local-port').value, 10),
+        remote_host: document.getElementById('tunnel-remote-host').value.trim() || '127.0.0.1',
+        remote_port: parseInt(document.getElementById('tunnel-remote-port').value, 10),
+        auth_type: document.getElementById('tunnel-auth-type').value,
+        private_key_path: document.getElementById('tunnel-key-path').value.trim(),
+        secret: document.getElementById('tunnel-secret').value,
+        save_secret: document.getElementById('tunnel-save-secret').checked,
+        auto_connect: document.getElementById('tunnel-auto-connect').checked
+      };
+
+      btn.disabled = true;
+      btn.textContent = 'Saving...';
+
+      try {
+        const res = await fetch(id ? `/api/tunnels/${id}` : '/api/tunnels', {
+          method: id ? 'PUT' : 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Failed to save SSH tunnel profile');
+        closeTunnelModal();
+        await fetchTunnels();
+        fetchStatus();
+        showToast(`Saved SSH tunnel profile ${payload.name}`, 'success');
+      } catch (err) {
+        errEl.textContent = err.message;
+        errEl.classList.remove('hidden');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = id ? 'Save Changes' : 'Save Profile';
+      }
+    }
+
+    async function toggleTunnelConnection(id, btn) {
+      const t = tunnels.find(item => item.id === id);
+      if (!t) return;
+
+      const isActive = t.status === 'connected' || t.status === 'connecting' || t.status === 'reconnecting';
+      if (isActive) {
+        if (btn) btn.disabled = true;
+        try {
+          const res = await fetch(`/api/tunnels/${id}/stop`, { method: 'POST' });
+          if (!res.ok) throw new Error('Failed to stop SSH tunnel');
+          await fetchTunnels();
+          fetchStatus();
+          showToast(`Disconnected SSH tunnel ${t.name}`, 'info');
+        } catch (err) {
+          showToast(err.message, 'error');
+        } finally {
+          if (btn) btn.disabled = false;
+        }
+        return;
+      }
+
+      if (t.auth_type === 'password' && !t.has_saved_secret) {
+        openTunnelSecretModal(id, `Enter password for ${t.ssh_user}@${t.ssh_host}:`, btn);
+        return;
+      }
+
+      await startTunnelWithSecret(id, '', btn);
+    }
+
+    async function startTunnelWithSecret(id, secret, btn) {
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Dialing...';
+      }
+      try {
+        const res = await fetch(`/api/tunnels/${id}/start`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ secret })
+        });
+        const data = await res.json();
+        await fetchTunnels();
+        fetchStatus();
+        if (!res.ok) {
+          if (data.message && data.message.toLowerCase().includes('passphrase is required')) {
+            openTunnelSecretModal(id, 'Private key is encrypted. Enter key passphrase:', btn);
+            return;
+          }
+          throw new Error(data.message || 'SSH handshake failed');
+        }
+        showToast(`SSH tunnel connected on 127.0.0.1:${data.local_port}`, 'success');
+      } catch (err) {
+        showToast(err.message, 'error');
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    }
+
+    function openTunnelSecretModal(id, promptText, triggerEl) {
+      lastFocusedElement = triggerEl || document.activeElement;
+      document.getElementById('runtime-secret-tunnel-id').value = id;
+      document.getElementById('tunnel-secret-prompt-text').textContent = promptText;
+      document.getElementById('runtime-secret-input').value = '';
+      document.getElementById('tunnel-secret-modal').classList.remove('hidden');
+      document.getElementById('runtime-secret-input').focus();
+    }
+
+    function closeTunnelSecretModal() {
+      document.getElementById('tunnel-secret-modal').classList.add('hidden');
+      restoreFocus();
+    }
+
+    async function submitTunnelRuntimeSecret(e) {
+      e.preventDefault();
+      const id = document.getElementById('runtime-secret-tunnel-id').value;
+      const secret = document.getElementById('runtime-secret-input').value;
+      const btn = document.getElementById('btn-submit-runtime-secret');
+      closeTunnelSecretModal();
+      await startTunnelWithSecret(id, secret, btn);
+    }
+
+    async function deleteTunnel(id, name) {
+      try {
+        const res = await fetch(`/api/tunnels/${id}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error('Failed to delete SSH tunnel');
+        await fetchTunnels();
+        fetchStatus();
+        showToast(`Deleted SSH tunnel ${name}`, 'success');
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    function openDocsModal(triggerEl, initialTab) {
+      lastFocusedElement = triggerEl || document.activeElement;
+      document.getElementById('docs-modal').classList.remove('hidden');
+      switchDocsTab(initialTab || 'quickstart');
+    }
+
+    function closeDocsModal() {
+      document.getElementById('docs-modal').classList.add('hidden');
+      if (window.location.hash === '#docs') {
+        history.replaceState(null, '', window.location.pathname);
+      }
+      restoreFocus();
+    }
+
+    function switchDocsTab(tabName) {
+      const tabs = ['quickstart', 'ssh', 'lan', 'storage', 'install'];
+      for (const t of tabs) {
+        const panel = document.getElementById(`docs-panel-${t}`);
+        const btn = document.getElementById(`docs-tab-btn-${t}`);
+        if (panel) {
+          panel.classList.toggle('hidden', t !== tabName);
+        }
+        if (btn) {
+          btn.className = t === tabName
+            ? 'min-h-[38px] px-3 py-2 border-b-2 border-[#dc2626] text-[#b91c1c] font-bold'
+            : 'min-h-[38px] px-3 py-2 border-b-2 border-transparent text-[#52525b] hover:text-[#18181b]';
+        }
+      }
+    }
+
+    async function enableLANFromDocs(btn) {
+      const orig = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Applying...';
+      try {
+        const stRes = await fetch('/api/settings');
+        const cfg = await stRes.json();
+        cfg.bind_address = '0.0.0.0';
+        cfg.lan_broadcast = true;
+        const putRes = await fetch('/api/settings', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(cfg)
+        });
+        const data = await putRes.json();
+        if (!putRes.ok) throw new Error(data.message || 'Failed to enable LAN mode');
+        await fetchStatus();
+        showToast('LAN Mode enabled (0.0.0.0 + mDNS :5353 + DNS :53)', 'success');
+      } catch (err) {
+        showToast(err.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = orig;
+      }
+    }
+
+    async function handleWorkbenchBackupRestore(event) {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const res = await fetch('/api/backup/restore', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: text
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Failed to restore backup');
+        await Promise.all([fetchRoutes(), fetchTunnels(), fetchStatus()]);
+        showToast(data.message || 'Backup restored to disk', 'success');
+      } catch (err) {
+        showToast(err.message, 'error');
+      } finally {
+        event.target.value = '';
       }
     }
 
@@ -1430,46 +2441,19 @@
       });
     }
 
-    function scrollToRoutes() {
-      document.getElementById('section-routes').scrollIntoView({ behavior: 'smooth' });
-    }
-    function scrollToLogs() {
-      document.getElementById('section-logs').scrollIntoView({ behavior: 'smooth' });
-    }
-    function scrollToCert() {
-      document.getElementById('section-cert').scrollIntoView({ behavior: 'smooth' });
-    }
-    function scrollToHosts() {
-      document.getElementById('section-hosts').scrollIntoView({ behavior: 'smooth' });
-    }
-
     function showToast(message, type = 'info') {
       const container = document.getElementById('toast-container');
       const toast = document.createElement('div');
-      toast.className = `pointer-events-auto flex items-center space-x-2.5 px-3.5 py-2.5 rounded border text-xs font-mono transition-all duration-200 transform translate-y-2 opacity-0 ${
-        type === 'success' ? 'bg-[#0f172a] border-[#10b981]/50 text-[#34d399]' :
-        type === 'error' ? 'bg-[#0f172a] border-rose-500/50 text-rose-300' :
-        'bg-[#0f172a] border-[#334155] text-slate-200'
+      toast.className = `pointer-events-auto flex items-center gap-2.5 px-3.5 py-2.5 border shadow-lg text-xs font-mono transition-all duration-150 transform translate-y-2 opacity-0 ${
+        type === 'success' ? 'bg-[#ffffff] border-[#047857] text-[#047857]' :
+        type === 'error' ? 'bg-[#fef2f2] border-[#dc2626] text-[#b91c1c]' :
+        'bg-[#ffffff] border-[#dc2626] text-[#18181b]'
       }`;
 
-      const icon = type === 'success' ? `
-        <svg class="w-4 h-4 text-[#10b981] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-        </svg>
-      ` : type === 'error' ? `
-        <svg class="w-4 h-4 text-rose-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-        </svg>
-      ` : `
-        <svg class="w-4 h-4 text-[#06b6d4] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-        </svg>
-      `;
-
       toast.innerHTML = `
-        ${icon}
-        <span class="flex-1">${message}</span>
-        <button onclick="this.parentElement.remove()" class="text-slate-400 hover:text-white transition ml-2">&times;</button>
+        <span class="font-bold">${type === 'success' ? '[OK]' : type === 'error' ? '[ERR]' : '[INFO]'}</span>
+        <span class="flex-1 font-medium">${escapeHTML(message)}</span>
+        <button type="button" aria-label="Dismiss notification" onclick="this.parentElement.remove()" class="text-[#52525b] hover:text-[#18181b] transition ml-2 px-1 font-bold">&times;</button>
       `;
 
       container.appendChild(toast);
@@ -1479,7 +2463,7 @@
 
       setTimeout(() => {
         toast.classList.add('opacity-0', 'translate-y-2');
-        setTimeout(() => toast.remove(), 250);
+        setTimeout(() => toast.remove(), 200);
       }, 3500);
     }
   </script>

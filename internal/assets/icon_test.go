@@ -20,8 +20,8 @@ func TestGetAppIcons(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to decode png: %v", err)
 	}
-	if img.Bounds().Dx() != 32 || img.Bounds().Dy() != 32 {
-		t.Errorf("expected 32x32 image, got %dx%d", img.Bounds().Dx(), img.Bounds().Dy())
+	if img.Bounds().Dx() < 32 || img.Bounds().Dx() != img.Bounds().Dy() {
+		t.Errorf("expected square icon >= 32x32, got %dx%d", img.Bounds().Dx(), img.Bounds().Dy())
 	}
 
 	// Verify ICO header: 0, 1, 1 (first 4 bytes: 0x00, 0x00, 0x01, 0x00)

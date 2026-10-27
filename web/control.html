@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reverse.Local // Desktop Control Panel</title>
+  <link rel="icon" href="/favicon.ico" type="image/x-icon">
+  <link rel="apple-touch-icon" href="/icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {
+      color-scheme: light;
+    }
+    body {
+      background-color: #fafafa;
+      color: #18181b;
+      font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      user-select: none;
+    }
+    button:focus-visible,
+    a:focus-visible,
+    input:focus-visible,
+    select:focus-visible {
+      outline: 2px solid #dc2626;
+      outline-offset: 2px;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, ::before, ::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
+    }
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f4f4f5;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #a1a1aa;
+    }
+  </style>
+</head>
+<body class="bg-[#fafafa] text-[#18181b] min-h-[100dvh] flex flex-col antialiased selection:bg-[#dc2626] selection:text-[#ffffff] border-t-4 border-[#dc2626]">
+
+  <header class="w-full border-b border-[#e4e4e7] bg-[#ffffff] sticky top-0 z-20">
+    <div class="max-w-[480px] mx-auto px-4 py-3 flex items-center justify-between gap-3">
+      <div class="flex items-center gap-2.5 min-w-0">
+        <div class="px-2 py-1 bg-[#dc2626] font-mono text-xs font-bold text-[#ffffff] tracking-tight shrink-0" aria-hidden="true">
+          RL//CTRL
+        </div>
+        <div class="min-w-0">
+          <div class="flex items-center gap-2">
+            <h1 class="text-sm font-bold font-mono text-[#18181b] uppercase truncate">Control Panel</h1>
+            <span id="badge-os" class="px-1.5 py-0.5 text-[11px] font-mono bg-[#f4f4f5] text-[#52525b] border border-[#71717a]">os</span>
+          </div>
+          <p class="text-[11px] font-mono text-[#52525b] truncate">Daemon Settings &amp; Service Controller</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-1.5 shrink-0">
+        <a href="/#docs" target="_blank" rel="noopener" class="min-h-[38px] px-2.5 py-1.5 bg-[#ffffff] border border-[#71717a] hover:border-[#dc2626] text-[#18181b] hover:text-[#b91c1c] font-mono font-bold text-xs uppercase transition inline-flex items-center">
+          Docs
+        </a>
+        <button type="button" id="btn-open-workbench" onclick="triggerSystemAction('open_workbench', this)" class="min-h-[38px] px-3 py-1.5 bg-[#dc2626] hover:bg-[#b91c1c] text-[#ffffff] font-mono font-bold text-xs uppercase transition inline-flex items-center gap-1.5">
+          <span>Workbench</span>
+          <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="flex-1 w-full max-w-[480px] mx-auto p-3.5 space-y-3.5">
+
+    <div id="status-banner" role="status" aria-live="polite" class="hidden border px-3 py-2 text-xs font-mono flex items-start justify-between gap-2">
+      <span id="status-banner-text" class="leading-relaxed break-words select-text"></span>
+      <button type="button" onclick="hideBanner()" aria-label="Dismiss notification" class="text-[#52525b] hover:text-[#18181b] shrink-0 px-1 font-bold">✕</button>
+    </div>
+
+    <section aria-labelledby="heading-services" class="bg-[#ffffff] border border-[#e4e4e7]">
+      <div class="px-3.5 py-2 border-b border-[#e4e4e7] bg-[#f4f4f5] flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span class="font-mono text-xs font-bold text-[#dc2626]">[01]</span>
+          <h2 id="heading-services" class="text-xs font-bold font-mono uppercase tracking-wider text-[#18181b]">Service &amp; Engine Deck</h2>
+        </div>
+        <button type="button" onclick="loadControlState()" class="min-h-[26px] px-2 py-0.5 bg-[#ffffff] border border-[#71717a] hover:border-[#18181b] text-[11px] font-mono text-[#18181b] transition">
+          Refresh
+        </button>
+      </div>
+
+      <div class="divide-y divide-[#e4e4e7] font-mono text-xs">
+        <div class="p-3 flex items-center justify-between gap-3">
+          <div class="min-w-0">
+            <div class="flex items-center gap-2">
+              <span id="proxy-dot" class="w-2 h-2 rounded-full bg-[#047857]" aria-hidden="true"></span>
+              <span class="font-semibold text-[#18181b]">HTTP/HTTPS Reverse Proxy</span>
+              <span id="proxy-state-badge" class="px-1.5 py-0.5 text-[11px] bg-[#ecfdf5] border border-[#047857] text-[#047857] font-semibold">RUNNING</span>
+            </div>
+            <p id="proxy-summary" class="text-[11px] text-[#52525b] mt-1 tabular-nums">Loading active routes...</p>
+          </div>
+          <button type="button" id="btn-toggle-proxy" onclick="triggerSystemAction('toggle_proxy', this)" class="min-h-[34px] px-3 py-1 bg-[#ffffff] border border-[#71717a] hover:border-[#dc2626] hover:text-[#b91c1c] text-[#18181b] text-xs font-mono font-semibold transition shrink-0">
+            Pause Proxy
+          </button>
+        </div>
+
+        <div class="p-3 flex items-center justify-between gap-3">
+          <div class="min-w-0">
+            <div class="flex items-center gap-2">
+              <span id="ssh-dot" class="w-2 h-2 rounded-full bg-[#0369a1]" aria-hidden="true"></span>
+              <span class="font-semibold text-[#18181b]">Native Go SSH Engine (-L -N)</span>
+              <span id="ssh-state-badge" class="px-1.5 py-0.5 text-[11px] bg-[#f4f4f5] border border-[#71717a] text-[#0369a1] font-semibold tabular-nums">0 / 0</span>
+            </div>
+            <p id="ssh-summary" class="text-[11px] text-[#52525b] mt-1">Manage individual tunnels in Browser Workbench</p>
+          </div>
+          <div class="flex items-center gap-1.5 shrink-0">
+            <button type="button" onclick="triggerSystemAction('start_auto_tunnels', this)" class="min-h-[34px] px-2.5 py-1 bg-[#ffffff] border border-[#71717a] hover:border-[#047857] text-[#047857] text-[11px] font-mono font-semibold transition">
+              Start Auto
+            </button>
+            <button type="button" onclick="triggerSystemAction('stop_all_tunnels', this)" class="min-h-[34px] px-2.5 py-1 bg-[#ffffff] border border-[#71717a] hover:border-[#dc2626] text-[#b91c1c] text-[11px] font-mono font-semibold transition">
+              Stop All
+            </button>
+          </div>
+        </div>
+        <div class="p-3 flex items-center justify-between gap-3">
+          <div class="min-w-0">
+            <div class="flex items-center gap-2">
+              <span id="lan-dot" class="w-2 h-2 rounded-full bg-[#047857]" aria-hidden="true"></span>
+              <span class="font-semibold text-[#18181b]">LAN DNS &amp; mDNS Broadcast</span>
+              <span id="lan-ip-badge" class="px-1.5 py-0.5 text-[11px] bg-[#ecfdf5] border border-[#047857] text-[#047857] font-semibold tabular-nums">LAN IP</span>
+            </div>
+            <p id="lan-summary" class="text-[11px] text-[#52525b] mt-1 tabular-nums">mDNS :5353 + DNS :53 responder for same Wi-Fi devices</p>
+          </div>
+          <button type="button" onclick="enableFullLANMode()" class="min-h-[34px] px-2.5 py-1 bg-[#ffffff] border border-[#71717a] hover:border-[#dc2626] text-[#b91c1c] text-[11px] font-mono font-semibold transition shrink-0">
+            1-Click LAN
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="heading-network" class="bg-[#ffffff] border border-[#e4e4e7]">
+      <div class="px-3.5 py-2 border-b border-[#e4e4e7] bg-[#f4f4f5] flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span class="font-mono text-xs font-bold text-[#dc2626]">[02]</span>
+          <h2 id="heading-network" class="text-xs font-bold font-mono uppercase tracking-wider text-[#18181b]">Daemon &amp; Network Settings</h2>
+        </div>
+        <span class="text-[11px] font-mono text-[#52525b]">settings.json</span>
+      </div>
+
+      <form id="settings-form" onsubmit="saveSettings(event)" class="p-3.5 space-y-3 text-xs font-mono">
+        <div>
+          <label for="input-bind" class="block text-[11px] text-[#52525b] uppercase font-semibold mb-1">Network Bind Interface</label>
+          <select id="input-bind" class="w-full min-h-[36px] px-2.5 py-1 bg-[#ffffff] border border-[#71717a] text-[#18181b] font-mono text-xs">
+            <option value="127.0.0.1">127.0.0.1 (Localhost Isolation Only)</option>
+            <option value="0.0.0.0">0.0.0.0 (All Interfaces / LAN &amp; Wi-Fi Access)</option>
+          </select>
+        </div>
+
+        <div class="grid grid-cols-3 gap-2.5">
+          <div>
+            <label for="input-http-port" class="block text-[11px] text-[#52525b] uppercase font-semibold mb-1">HTTP Port</label>
+            <input id="input-http-port" type="number" min="1" max="65535" required class="w-full min-h-[36px] px-2.5 py-1 bg-[#ffffff] border border-[#71717a] text-[#18181b] font-mono text-xs tabular-nums">
+          </div>
+          <div>
+            <label for="input-https-port" class="block text-[11px] text-[#52525b] uppercase font-semibold mb-1">HTTPS Port</label>
+            <input id="input-https-port" type="number" min="1" max="65535" required class="w-full min-h-[36px] px-2.5 py-1 bg-[#ffffff] border border-[#71717a] text-[#18181b] font-mono text-xs tabular-nums">
+          </div>
+          <div>
+            <label for="input-keepalive" class="block text-[11px] text-[#52525b] uppercase font-semibold mb-1">SSH Ping (s)</label>
+            <input id="input-keepalive" type="number" min="5" max="300" required class="w-full min-h-[36px] px-2.5 py-1 bg-[#ffffff] border border-[#71717a] text-[#18181b] font-mono text-xs tabular-nums">
+          </div>
+        </div>
+
+        <div class="space-y-1.5 pt-2 border-t border-[#e4e4e7]">
+          <label class="flex items-center justify-between gap-2 py-0.5 cursor-pointer">
+            <span class="text-[#18181b]">Broadcast DNS to LAN (<code class="text-[#b91c1c] font-semibold">mDNS :5353</code> &amp; <code class="text-[#b91c1c] font-semibold">DNS :53</code>)</span>
+            <input id="input-lan-broadcast" type="checkbox" class="w-4 h-4 accent-[#dc2626]">
+          </label>
+          <label class="flex items-center justify-between gap-2 py-0.5 cursor-pointer">
+            <span class="text-[#18181b]">Auto-sync OS <code class="text-[#b91c1c] font-semibold">hosts</code> file on route changes</span>
+            <input id="input-autosync-hosts" type="checkbox" class="w-4 h-4 accent-[#dc2626]">
+          </label>
+          <label class="flex items-center justify-between gap-2 py-0.5 cursor-pointer">
+            <span class="text-[#18181b]">Auto-reconnect dropped SSH tunnels</span>
+            <input id="input-ssh-reconnect" type="checkbox" class="w-4 h-4 accent-[#dc2626]">
+          </label>
+          <label class="flex items-center justify-between gap-2 py-0.5 cursor-pointer">
+            <span class="text-[#18181b]">Launch Reverse.Local on OS startup</span>
+            <input id="input-autostart" type="checkbox" class="w-4 h-4 accent-[#dc2626]">
+          </label>
+        </div>
+
+        <div class="pt-1 flex justify-end">
+          <button type="submit" id="btn-save-settings" class="w-full min-h-[36px] px-4 py-1.5 bg-[#dc2626] hover:bg-[#b91c1c] text-[#ffffff] font-mono font-bold text-xs uppercase transition">
+            Save &amp; Apply Settings
+          </button>
+        </div>
+      </form>
+    </section>
+
+    <section aria-labelledby="heading-utilities" class="bg-[#ffffff] border border-[#e4e4e7]">
+      <div class="px-3.5 py-2 border-b border-[#e4e4e7] bg-[#f4f4f5] flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span class="font-mono text-xs font-bold text-[#dc2626]">[03]</span>
+          <h2 id="heading-utilities" class="text-xs font-bold font-mono uppercase tracking-wider text-[#18181b]">System &amp; Certificate Maintenance</h2>
+        </div>
+        <span id="ca-trust-pill" class="px-1.5 py-0.5 text-[11px] font-mono bg-[#ffffff] border border-[#71717a] text-[#52525b]">CA: Checking</span>
+      </div>
+
+      <div class="p-3 grid grid-cols-2 gap-2 font-mono text-xs">
+        <button type="button" onclick="installCA(this)" class="min-h-[36px] px-2.5 py-1.5 bg-[#ffffff] border border-[#71717a] hover:border-[#047857] text-[#18181b] text-left transition flex items-center justify-between">
+          <span class="font-medium">Trust Root CA</span>
+          <span class="text-[#047857] text-[11px] font-semibold">OS Store</span>
+        </button>
+
+        <button type="button" onclick="triggerSystemAction('flush_dns', this)" class="min-h-[36px] px-2.5 py-1.5 bg-[#ffffff] border border-[#71717a] hover:border-[#0369a1] text-[#18181b] text-left transition flex items-center justify-between">
+          <span class="font-medium">Flush DNS Cache</span>
+          <span class="text-[#0369a1] text-[11px] font-semibold">Resolver</span>
+        </button>
+
+        <button type="button" onclick="triggerSystemAction('sync_hosts', this)" class="min-h-[36px] px-2.5 py-1.5 bg-[#ffffff] border border-[#71717a] hover:border-[#dc2626] text-[#18181b] text-left transition flex items-center justify-between">
+          <span class="font-medium">Force Sync Hosts</span>
+          <span class="text-[#b91c1c] text-[11px] font-semibold">Sync</span>
+        </button>
+
+        <button type="button" onclick="triggerSystemAction('open_config_dir', this)" class="min-h-[36px] px-2.5 py-1.5 bg-[#ffffff] border border-[#71717a] hover:border-[#18181b] text-[#18181b] text-left transition flex items-center justify-between">
+          <span class="font-medium">Open Config Dir</span>
+          <span class="text-[#52525b] text-[11px]">Folder</span>
+        </button>
+
+        <a href="/api/backup" download="reverse-local-backup.json" class="min-h-[36px] px-2.5 py-1.5 bg-[#ffffff] border border-[#71717a] hover:border-[#dc2626] text-[#18181b] text-left transition flex items-center justify-between">
+          <span class="font-medium">Export Backup</span>
+          <span class="text-[#b91c1c] text-[11px] font-semibold">.JSON</span>
+        </a>
+
+        <button type="button" onclick="document.getElementById('backup-file-input').click()" class="min-h-[36px] px-2.5 py-1.5 bg-[#ffffff] border border-[#71717a] hover:border-[#047857] text-[#18181b] text-left transition flex items-center justify-between">
+          <span class="font-medium">Import Backup</span>
+          <span class="text-[#047857] text-[11px] font-semibold">Restore</span>
+        </button>
+        <input id="backup-file-input" type="file" accept=".json,application/json" class="hidden" onchange="importBackupFile(event)">
+      </div>
+
+      <div class="px-3.5 py-2 border-t border-[#e4e4e7] bg-[#f4f4f5] font-mono text-[11px] text-[#52525b] space-y-0.5 select-text">
+        <div class="truncate">CONFIG: <span id="path-config" class="text-[#18181b]">...</span></div>
+        <div class="truncate">HOSTS: <span id="path-hosts" class="text-[#18181b]">...</span></div>
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    const FIXED_WIDTH = 480;
+    const FIXED_HEIGHT = 660;
+
+    function lockViewportDimensions() {
+      try {
+        if (window.outerWidth && (Math.abs(window.outerWidth - FIXED_WIDTH) > 16 || Math.abs(window.outerHeight - FIXED_HEIGHT) > 16)) {
+          window.resizeTo(FIXED_WIDTH, FIXED_HEIGHT);
+        }
+      } catch (e) {}
+    }
+
+    window.addEventListener('resize', lockViewportDimensions);
+
+    function showBanner(message, isError) {
+      const banner = document.getElementById('status-banner');
+      const text = document.getElementById('status-banner-text');
+      banner.className = isError
+        ? 'border px-3 py-2 text-xs font-mono flex items-start justify-between gap-2 bg-[#fef2f2] border-[#dc2626] text-[#b91c1c]'
+        : 'border px-3 py-2 text-xs font-mono flex items-start justify-between gap-2 bg-[#ecfdf5] border-[#047857] text-[#047857]';
+      text.textContent = message;
+    }
+
+    function hideBanner() {
+      document.getElementById('status-banner').classList.add('hidden');
+    }
+
+    async function loadControlState() {
+      try {
+        const [statusRes, settingsRes] = await Promise.all([
+          fetch('/api/status'),
+          fetch('/api/settings')
+        ]);
+        if (!statusRes.ok || !settingsRes.ok) {
+          throw new Error('Failed to query daemon state');
+        }
+        const status = await statusRes.json();
+        const cfg = await settingsRes.json();
+
+        document.getElementById('badge-os').textContent = status.os || 'local';
+
+        const proxyEnabled = status.proxy_enabled !== false;
+        const proxyDot = document.getElementById('proxy-dot');
+        const proxyBadge = document.getElementById('proxy-state-badge');
+        const proxyBtn = document.getElementById('btn-toggle-proxy');
+
+        if (proxyEnabled) {
+          proxyDot.className = 'w-2 h-2 rounded-full bg-[#047857]';
+          proxyBadge.className = 'px-1.5 py-0.5 text-[11px] bg-[#ecfdf5] border border-[#047857] text-[#047857] font-semibold';
+          proxyBadge.textContent = 'RUNNING';
+          proxyBtn.textContent = 'Pause Proxy';
+        } else {
+          proxyDot.className = 'w-2 h-2 rounded-full bg-[#b45309]';
+          proxyBadge.className = 'px-1.5 py-0.5 text-[11px] bg-[#fffbeb] border border-[#b45309] text-[#b45309] font-semibold';
+          proxyBadge.textContent = 'PAUSED';
+          proxyBtn.textContent = 'Resume Proxy';
+        }
+
+        document.getElementById('proxy-summary').textContent =
+          `${status.active_routes} active / ${status.total_routes} total routes on ${cfg.bind_address}:${status.https_port}`;
+
+        const activeTunnels = status.active_tunnels || 0;
+        const totalTunnels = status.total_tunnels || 0;
+        document.getElementById('ssh-state-badge').textContent = `${activeTunnels} / ${totalTunnels} active`;
+        document.getElementById('ssh-summary').textContent =
+          activeTunnels > 0
+            ? `${activeTunnels} SSH port forwarding tunnel(s) online`
+            : 'No active SSH tunnels currently connected';
+
+        const lanIP = status.lan_ip || '127.0.0.1';
+        const lanActive = Boolean(status.lan_broadcast_active);
+        const lanQueries = status.lan_dns_queries || 0;
+        const lanBadge = document.getElementById('lan-ip-badge');
+        const lanDot = document.getElementById('lan-dot');
+        if (lanActive) {
+          lanDot.className = 'w-2 h-2 rounded-full bg-[#047857]';
+          lanBadge.className = 'px-1.5 py-0.5 text-[11px] bg-[#ecfdf5] border border-[#047857] text-[#047857] font-semibold tabular-nums';
+          lanBadge.textContent = lanIP;
+          document.getElementById('lan-summary').textContent =
+            `Broadcasting to LAN (${lanIP}) • ${lanQueries} DNS queries resolved`;
+        } else {
+          lanDot.className = 'w-2 h-2 rounded-full bg-[#71717a]';
+          lanBadge.className = 'px-1.5 py-0.5 text-[11px] bg-[#f4f4f5] border border-[#71717a] text-[#52525b] font-semibold tabular-nums';
+          lanBadge.textContent = lanIP;
+          document.getElementById('lan-summary').textContent = 'LAN DNS broadcast disabled in settings';
+        }
+
+        const caPill = document.getElementById('ca-trust-pill');
+        if (status.ca_installed) {
+          caPill.className = 'px-1.5 py-0.5 text-[11px] font-mono bg-[#ecfdf5] border border-[#047857] text-[#047857] font-semibold';
+          caPill.textContent = 'CA: Trusted';
+        } else {
+          caPill.className = 'px-1.5 py-0.5 text-[11px] font-mono bg-[#fef2f2] border border-[#dc2626] text-[#b91c1c] font-semibold';
+          caPill.textContent = 'CA: Untrusted';
+        }
+
+        document.getElementById('input-bind').value = cfg.bind_address || '127.0.0.1';
+        document.getElementById('input-http-port').value = cfg.http_port || 80;
+        document.getElementById('input-https-port').value = cfg.https_port || 443;
+        document.getElementById('input-keepalive').value = cfg.ssh_keepalive_sec || 15;
+        document.getElementById('input-lan-broadcast').checked = cfg.lan_broadcast !== false;
+        document.getElementById('input-autosync-hosts').checked = Boolean(cfg.auto_sync_hosts);
+        document.getElementById('input-ssh-reconnect').checked = Boolean(cfg.ssh_auto_reconnect);
+        document.getElementById('input-autostart').checked = Boolean(cfg.auto_start_on_boot);
+
+        document.getElementById('path-config').textContent = status.config_dir || 'Default OS user config dir';
+        document.getElementById('path-hosts').textContent = status.hosts_path || '/etc/hosts';
+      } catch (err) {
+        showBanner(err.message || 'Unable to reach daemon API', true);
+      }
+    }
+
+    async function saveSettings(e) {
+      e.preventDefault();
+      const btn = document.getElementById('btn-save-settings');
+      const origText = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Saving...';
+
+      try {
+        const payload = {
+          bind_address: document.getElementById('input-bind').value,
+          http_port: parseInt(document.getElementById('input-http-port').value, 10),
+          https_port: parseInt(document.getElementById('input-https-port').value, 10),
+          ssh_keepalive_sec: parseInt(document.getElementById('input-keepalive').value, 10),
+          lan_broadcast: document.getElementById('input-lan-broadcast').checked,
+          auto_sync_hosts: document.getElementById('input-autosync-hosts').checked,
+          ssh_auto_reconnect: document.getElementById('input-ssh-reconnect').checked,
+          auto_start_on_boot: document.getElementById('input-autostart').checked
+        };
+
+        const res = await fetch('/api/settings', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.message || 'Failed to save settings');
+        }
+        showBanner(data.message || 'Daemon settings saved and applied.', false);
+        await loadControlState();
+      } catch (err) {
+        showBanner(err.message, true);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = origText;
+      }
+    }
+
+    async function triggerSystemAction(action, btn) {
+      const origText = btn ? btn.innerHTML : '';
+      if (btn) {
+        btn.disabled = true;
+      }
+      try {
+        const res = await fetch('/api/system/action', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.message || 'System action failed');
+        }
+        showBanner(data.message || 'Action completed.', false);
+        await loadControlState();
+      } catch (err) {
+        showBanner(err.message, true);
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = origText;
+        }
+      }
+    }
+
+    async function installCA(btn) {
+      const origText = btn.innerHTML;
+      btn.disabled = true;
+      try {
+        const res = await fetch('/api/ca/install', { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.message || 'CA installation failed');
+        }
+        showBanner(data.message || 'Root CA installed in OS trust store.', false);
+        await loadControlState();
+      } catch (err) {
+        showBanner(err.message, true);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = origText;
+      }
+    }
+
+    async function enableFullLANMode() {
+      document.getElementById('input-bind').value = '0.0.0.0';
+      document.getElementById('input-lan-broadcast').checked = true;
+      await saveSettings(new Event('submit'));
+    }
+
+    async function importBackupFile(event) {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const res = await fetch('/api/backup/restore', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: text
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.message || 'Backup restore failed');
+        }
+        showBanner(data.message || 'Configuration restored.', false);
+        await loadControlState();
+      } catch (err) {
+        showBanner(err.message, true);
+      } finally {
+        event.target.value = '';
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      lockViewportDimensions();
+      setInterval(lockViewportDimensions, 250);
+      loadControlState();
+      setInterval(loadControlState, 5000);
+    });
+  </script>
+</body>
+</html>

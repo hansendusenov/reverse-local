@@ -298,3 +298,99 @@ func TestLogsEndpointAndCapture(t *testing.T) {
 		t.Errorf("expected 0 logs after clear, got %d", len(clearedLogs))
 	}
 }
+
+func TestControlPanelSettingsAndTunnelsAPI(t *testing.T) {
+	srv, _, _, _ := setupTestServer(t)
+
+	// 1. GET /control
+	reqCtrl := httptest.NewRequest("GET", "https://reverse.local/control", nil)
+	wCtrl := httptest.NewRecorder()
+	srv.ServeHTTP(wCtrl, reqCtrl)
+	if wCtrl.Code != http.StatusOK || !bytes.Contains(wCtrl.Body.Bytes(), []byte("RL//CTRL")) {
+		t.Fatalf("expected 200 and RL//CTRL from /control, got %d", wCtrl.Code)
+	}
+
+	// 2. GET & PUT /api/settings
+	reqSet := httptest.NewRequest("PUT", "https://reverse.local/api/settings", bytes.NewBufferString(`{
+		"http_port": 8080,
+		"https_port": 8443,
+		"bind_address": "0.0.0.0",
+		"auto_sync_hosts": true,
+		"ssh_keepalive_sec": 25,
+		"ssh_auto_reconnect": true
+	}`))
+	wSet := httptest.NewRecorder()
+	srv.ServeHTTP(wSet, reqSet)
+	if wSet.Code != http.StatusOK {
+		t.Fatalf("expected 200 from PUT /api/settings, got %d: %s", wSet.Code, wSet.Body.String())
+	}
+
+	// 3. POST /api/system/action (toggle_proxy)
+	reqAct := httptest.NewRequest("POST", "https://reverse.local/api/system/action", bytes.NewBufferString(`{"action":"toggle_proxy"}`))
+	wAct := httptest.NewRecorder()
+	srv.ServeHTTP(wAct, reqAct)
+	if wAct.Code != http.StatusOK || srv.IsProxyEnabled() {
+		t.Fatalf("expected proxy to be paused after toggle_proxy, got %d", wAct.Code)
+	}
+
+	// 4. POST, GET, DELETE /api/tunnels
+	tunnelPayload := `{
+		"name": "Dev DB Forward",
+		"ssh_host": "bastion.dev.local",
+		"ssh_port": 22,
+		"ssh_user": "deploy",
+		"auth_type": "key",
+		"private_key_path": "~/.ssh/id_ed25519",
+		"local_addr": "127.0.0.1",
+		"local_port": 15432,
+		"remote_host": "127.0.0.1",
+		"remote_port": 5432
+	}`
+	reqTun := httptest.NewRequest("POST", "https://reverse.local/api/tunnels", bytes.NewBufferString(tunnelPayload))
+	wTun := httptest.NewRecorder()
+	srv.ServeHTTP(wTun, reqTun)
+	if wTun.Code != http.StatusCreated {
+		t.Fatalf("expected 201 from POST /api/tunnels, got %d: %s", wTun.Code, wTun.Body.String())
+	}
+
+	var createdTun map[string]interface{}
+	_ = json.Unmarshal(wTun.Body.Bytes(), &createdTun)
+	tunID := createdTun["id"].(string)
+
+	reqDelTun := httptest.NewRequest("DELETE", fmt.Sprintf("https://reverse.local/api/tunnels/%s", tunID), nil)
+	wDelTun := httptest.NewRecorder()
+	srv.ServeHTTP(wDelTun, reqDelTun)
+	if wDelTun.Code != http.StatusOK {
+		t.Fatalf("expected 200 from DELETE /api/tunnels/{id}, got %d", wDelTun.Code)
+	}
+
+	// 5. GET /api/backup & POST /api/backup/restore
+	reqExport := httptest.NewRequest("GET", "https://reverse.local/api/backup", nil)
+	wExport := httptest.NewRecorder()
+	srv.ServeHTTP(wExport, reqExport)
+	if wExport.Code != http.StatusOK {
+		t.Fatalf("expected 200 from GET /api/backup, got %d", wExport.Code)
+	}
+
+	restorePayload := `{
+		"routes": [{"domain": "restored.local", "target_url": "http://127.0.0.1:4000", "active": true}],
+		"tunnels": [{
+			"name": "Restored SSH",
+			"ssh_host": "jump.example.com",
+			"ssh_port": 22,
+			"ssh_user": "root",
+			"auth_type": "key",
+			"private_key_path": "~/.ssh/id_ed25519",
+			"local_addr": "127.0.0.1",
+			"local_port": 16379,
+			"remote_host": "127.0.0.1",
+			"remote_port": 6379
+		}]
+	}`
+	reqRestore := httptest.NewRequest("POST", "https://reverse.local/api/backup/restore", bytes.NewBufferString(restorePayload))
+	wRestore := httptest.NewRecorder()
+	srv.ServeHTTP(wRestore, reqRestore)
+	if wRestore.Code != http.StatusOK {
+		t.Fatalf("expected 200 from POST /api/backup/restore, got %d: %s", wRestore.Code, wRestore.Body.String())
+	}
+}
